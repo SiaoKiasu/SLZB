@@ -1,6 +1,19 @@
 import { describe, expect, it } from "vitest";
 import { totalPnl, valueHoldings } from "@/lib/portfolio";
 describe("portfolio accounting", () => {
+  it("suppresses stablecoin unrealized PnL even with cost, while valuing actual market prices", () => {
+    const rows = valueHoldings(
+      [
+        { asset: "USDT", free: "100", locked: "20" },
+        { asset: "USDC", free: "100", locked: "0" },
+      ],
+      [{ symbol: "USDCUSDT", lastPrice: "0.98", priceChangePercent: "-2" }],
+      { USDT: "1", USDC: "1" },
+    );
+    expect(rows.map((h) => h.unrealizedPnl)).toEqual([null, null]);
+    expect(rows.find((h) => h.asset === "USDC")?.value).toBe("98");
+    expect(rows.find((h) => h.asset === "USDC")?.averageCost).toBe("1");
+  });
   it("values free plus locked balances with decimal arithmetic", () => {
     const [h] = valueHoldings(
       [{ asset: "BTC", free: "0.1", locked: "0.2" }],

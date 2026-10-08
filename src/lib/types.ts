@@ -73,6 +73,7 @@ export type Dashboard = {
     costCoverage: number;
     totalPnl: string | null;
     realizedPnl: string | null;
+    realizedPnlNote: string;
     principal: string | null;
     cash: string;
     cashFree: string;

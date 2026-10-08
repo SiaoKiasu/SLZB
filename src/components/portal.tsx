@@ -33,6 +33,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { STABLECOINS } from "@/lib/assets";
 import { CostEditor } from "./cost-editor";
 import type { Dashboard, Holding, Trade } from "@/lib/types";
 type Tab = "overview" | "holdings" | "activity";
@@ -679,11 +680,7 @@ export function Portal() {
                       {profit(data.summary.realizedPnl)}
                       <span>USDT</span>
                     </div>
-                    <div className="stat-note">
-                      {data.summary.realizedPnl === null
-                        ? "历史同步中或管理员成本未齐全"
-                        : "已同步卖出 · 管理员成本口径"}
-                    </div>
+                    <div className="stat-note">{data.summary.realizedPnlNote}</div>
                   </div>
                   <div className="stat">
                     <div className="stat-label">
@@ -698,8 +695,8 @@ export function Portal() {
                     </div>
                     <div className="stat-note">
                       {data.summary.unrealizedPnl === null
-                        ? "历史同步中或管理员成本未齐全"
-                        : `管理员成本 · ${data.summary.costCoverage} 种资产`}
+                        ? "管理员成本未齐全或行情缺失"
+                        : `管理员成本 · ${data.summary.costCoverage} 种资产 · 不含稳定币`}
                     </div>
                   </div>
                   <div className="stat">
@@ -1119,7 +1116,7 @@ function HoldingTable({
           <tr>
             <th>资产</th>
             <th>持有数量 / 冻结</th>
-            <th>最新价格 / 24h</th>
+            <th>成本 (USDT / 枚)</th>
             <th>资产估值 (USDT)</th>
             <th>持仓浮盈亏 (USDT)</th>
             <th>资产占比</th>
@@ -1142,12 +1139,8 @@ function HoldingTable({
                 <small>冻结 {hidden ? "••••" : number(h.locked, 8)}</small>
               </td>
               <td className="numeric">
-                <strong>{money(h.price)}</strong>
-                <small className={(h.change24h ?? 0) >= 0 ? "positive" : "negative"}>
-                  {h.change24h === null
-                    ? "暂无行情"
-                    : `${h.change24h >= 0 ? "+" : ""}${number(h.change24h)}%`}
-                </small>
+                <strong>{money(h.averageCost)}</strong>
+                {h.averageCost === null && <small>未设置</small>}
               </td>
               <td className="numeric">
                 <strong>{money(h.value)}</strong>
@@ -1163,11 +1156,8 @@ function HoldingTable({
                         : "negative"
                   }
                 >
-                  {profit(h.unrealizedPnl)}
+                  {STABLECOINS.has(h.asset) ? "—" : profit(h.unrealizedPnl)}
                 </strong>
-                <small>
-                  {h.averageCost === null ? "管理员尚未设置成本" : `成本 ${money(h.averageCost)}`}
-                </small>
               </td>
               <td>
                 <div className="allocation-cell">

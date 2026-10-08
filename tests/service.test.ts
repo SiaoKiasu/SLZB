@@ -57,6 +57,7 @@ describe("snapshot and valuation integrity", () => {
     expect(first.holdings[0].averageCost).toBe("58000");
     expect(first.summary.unrealizedPnl).toBe("3000");
     expect(first.summary.realizedPnl).toBeNull();
+    expect(first.summary.realizedPnlNote).toContain("成交历史同步中");
     mocks.costs.mockResolvedValue({ costs: { BTC: "59000" } });
     expect((await dashboard(c)).summary.unrealizedPnl).toBe("1500");
     expect(mocks.load).toHaveBeenCalledTimes(1);
@@ -80,7 +81,7 @@ describe("snapshot and valuation integrity", () => {
       cashFree: "100",
       cashLocked: "20",
       stablecoinValue: "169.5",
-      unrealizedPnl: null,
+      unrealizedPnl: "0",
       realizedPnl: null,
     });
   });

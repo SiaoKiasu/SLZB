@@ -85,8 +85,8 @@ export async function dashboard(c: Config, persist = false): Promise<Dashboard> 
   const unpriced = holdings.filter((h) => h.value === null).length;
   const baseline = demo ? "100000" : c.PERFORMANCE_BASELINE_USDT;
   const netFlows = demo ? "0" : c.PERFORMANCE_NET_FLOWS_USDT;
-  const nonCash = holdings.filter((h) => h.asset !== "USDT");
-  const costed = nonCash.filter((h) => h.unrealizedPnl !== null);
+  const nonStableHoldings = holdings.filter((h) => !STABLECOINS.has(h.asset));
+  const costed = nonStableHoldings.filter((h) => h.unrealizedPnl !== null);
   const cash = holdings.find((h) => h.asset === "USDT");
   const warnings = [...data.warnings];
   let history = demo ? demoHistory(equity) : [];
@@ -106,7 +106,7 @@ export async function dashboard(c: Config, persist = false): Promise<Dashboard> 
   if (!demo && !c.DATABASE_URL) warnings.push("历史净值尚未启用，实时账户数据可正常查看。");
   if (unpriced)
     warnings.push(`${unpriced} 种资产缺少可用行情，当前总额仅为已估值资产小计，累计盈亏暂停计算。`);
-  const missingCosts = nonCash.filter((h) => h.averageCost === null).map((h) => h.asset);
+  const missingCosts = nonStableHoldings.filter((h) => h.averageCost === null).map((h) => h.asset);
   if (costStorageFailed)
     warnings.push("管理员成本暂时无法读取，成本相关盈亏暂停计算，请稍后重试。");
   else if (missingCosts.length)
@@ -140,8 +140,17 @@ export async function dashboard(c: Config, persist = false): Promise<Dashboard> 
       pricedAssets: holdings.length - unpriced,
       unpricedAssets: unpriced,
       unrealizedPnl:
-        costed.length === nonCash.length ? sum(costed.map((h) => h.unrealizedPnl)) : null,
+        costed.length === nonStableHoldings.length ? sum(costed.map((h) => h.unrealizedPnl)) : null,
       realizedPnl: accounting.realizedPnl,
+      realizedPnlNote:
+        accounting.realizedPnl !== null
+          ? "已同步卖出 · 管理员成本口径"
+          : [
+              ...(costStorageFailed ? ["成本暂时无法读取"] : []),
+              ...(!data.tradesComplete ? ["成交历史同步中"] : []),
+              ...(accounting.missing.length ? [`缺 ${accounting.missing.join("、")} 成本`] : []),
+              ...(accounting.unsupported ? ["非 USDT 卖出待核算"] : []),
+            ].join(" · ") || "尚无可核算的成交历史",
       principal: demo ? "100000" : (c.PRINCIPAL_USDT ?? null),
       cash: cash?.quantity ?? "0",
       cashFree: cash?.free ?? "0",

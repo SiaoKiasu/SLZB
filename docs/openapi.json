@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "SLZB Spot Monitor",
-    "version": "0.5.0",
+    "version": "0.5.1",
     "description": "多用户现货监控：普通用户只读绑定账户；管理员可切换启用账户并维护手工成本。持久 Cookie 自动续期。"
   },
   "servers": [
@@ -703,7 +703,8 @@
             "$ref": "#/components/schemas/NullableAmount"
           },
           "unrealizedPnl": {
-            "$ref": "#/components/schemas/NullableAmount"
+            "$ref": "#/components/schemas/NullableAmount",
+            "description": "稳定币固定为 null（界面显示 —），其他资产按管理员单位成本计算。"
           }
         }
       },
@@ -798,7 +799,8 @@
             "type": "integer"
           },
           "unrealizedPnl": {
-            "$ref": "#/components/schemas/NullableAmount"
+            "$ref": "#/components/schemas/NullableAmount",
+            "description": "仅汇总非稳定币持仓浮盈；非稳定币成本或行情缺失时为 null。"
           },
           "costCoverage": {
             "type": "integer"
@@ -836,6 +838,10 @@
           },
           "cashLocked": {
             "$ref": "#/components/schemas/Amount"
+          },
+          "realizedPnlNote": {
+            "type": "string",
+            "description": "已实现盈亏口径或无法计算的具体原因（历史同步、缺少成本、非 USDT 卖出等）。"
           }
         }
       },

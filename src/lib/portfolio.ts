@@ -1,7 +1,8 @@
 import Decimal from "decimal.js";
 import type { Balance, Holding, Ticker } from "./types";
 Decimal.set({ precision: 36 });
-export const STABLECOINS = new Set(["USDT", "USDC", "FDUSD", "DAI", "TUSD", "USDP"]);
+import { STABLECOINS } from "./assets";
+export { STABLECOINS } from "./assets";
 export function valueHoldings(
   balances: Balance[],
   tickers: Ticker[],
@@ -43,7 +44,7 @@ export function valueHoldings(
         change24h: rate?.change ?? null,
         averageCost,
         unrealizedPnl:
-          rate && averageCost !== null
+          !STABLECOINS.has(b.asset) && rate && averageCost !== null
             ? rate.price.minus(averageCost).mul(quantity).toString()
             : null,
       } satisfies Holding;

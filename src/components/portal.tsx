@@ -278,7 +278,7 @@ export function Portal() {
             <span className="brand-mark">
               <BarChart3 size={24} />
             </span>{" "}
-            HOLDVIEW <span className="brand-sub">PORTFOLIO</span>
+            HoldView <span className="brand-sub">PORTFOLIO</span>
           </div>
           <div className="entrance-copy">
             <span className="eyebrow">A CLEARER VIEW OF YOUR CAPITAL</span>
@@ -458,11 +458,11 @@ export function Portal() {
   return (
     <div className="shell">
       <aside className="sidebar">
-        <a className="brand" href="/" aria-label="HOLDVIEW 首页">
+        <a className="brand" href="/" aria-label="HoldView 首页">
           <span className="brand-mark">
             <BarChart3 size={23} />
           </span>
-          HOLDVIEW
+          HoldView
         </a>
         <div className="workspace-label">
           账户观察室 <span>SPOT</span>

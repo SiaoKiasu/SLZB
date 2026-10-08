@@ -1,91 +1,86 @@
 import "server-only";
-import { z } from "zod";
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { scryptSync } from "node:crypto";
+import { portalConfigSchema, type AccountSettings, type PortalUser } from "./config-schema";
 import { AppError } from "./errors";
-const amount = z.string().regex(/^\d+(\.\d+)?$/);
-const signedAmount = z.string().regex(/^-?\d+(\.\d+)?$/);
-const schema = z.object({
-  DATA_SOURCE: z.enum(["demo", "binance"]).default("demo"),
-  ACCOUNT_LABEL: z.string().min(1).max(60).default("我的现货账户"),
-  ACCOUNT_ID: z
-    .string()
-    .regex(/^[a-zA-Z0-9_-]{1,64}$/)
-    .default("main"),
-  BINANCE_ENV: z.enum(["mainnet", "testnet"]).default("mainnet"),
-  BINANCE_API_KEY: z.string().default(""),
-  BINANCE_API_SECRET: z.string().default(""),
-  TRACKED_SYMBOLS: z.string().default("BTCUSDT,ETHUSDT,SOLUSDT,BNBUSDT"),
-  PORTAL_PASSWORD: z.string().default(""),
-  SESSION_SECRET: z.string().default(""),
-  MONITOR_API_TOKEN: z.string().default(""),
-  DATABASE_URL: z.string().default(""),
-  CRON_SECRET: z.string().default(""),
-  PERFORMANCE_BASELINE_USDT: amount.optional(),
-  PERFORMANCE_BASELINE_AT: z.iso.datetime({ offset: true }).optional(),
-  PERFORMANCE_NET_FLOWS_USDT: signedAmount.optional(),
-  COST_BASIS_JSON: z.string().default("{}"),
-});
-export function getConfig() {
-  const raw = { ...process.env };
-  for (const key of [
-    "PERFORMANCE_BASELINE_USDT",
-    "PERFORMANCE_BASELINE_AT",
-    "PERFORMANCE_NET_FLOWS_USDT",
-  ])
-    if (!raw[key]) delete raw[key];
-  const parsed = schema.safeParse(raw);
-  if (!parsed.success)
-    throw new AppError(
-      "CONFIG_INVALID",
-      `环境变量格式错误：${parsed.error.issues.map((i) => i.path.join(".")).join(", ")}`,
-      503,
-    );
-  const c = parsed.data;
-  const symbols = [
-    ...new Set(
-      c.TRACKED_SYMBOLS.split(",")
-        .map((s) => s.trim().toUpperCase())
-        .filter(Boolean),
-    ),
-  ];
-  if (symbols.length > 20 || symbols.some((s) => !/^[A-Z0-9]{5,30}$/.test(s)))
-    throw new AppError("CONFIG_INVALID", "TRACKED_SYMBOLS 应为最多 20 个逗号分隔的交易对。", 503);
-  if (c.DATA_SOURCE === "binance" && (!c.BINANCE_API_KEY || !c.BINANCE_API_SECRET))
-    throw new AppError("CONFIG_MISSING", "请在服务端配置 Binance API Key 和 Secret。", 503);
-  if (
-    (c.DATA_SOURCE === "binance" || c.PORTAL_PASSWORD) &&
-    (c.PORTAL_PASSWORD.length < 12 || c.SESSION_SECRET.length < 32)
-  )
-    throw new AppError(
-      "AUTH_CONFIG",
-      "请配置至少 12 位的 PORTAL_PASSWORD 和至少 32 位的 SESSION_SECRET。",
-      503,
-    );
-  for (const k of ["MONITOR_API_TOKEN", "CRON_SECRET"] as const)
-    if (c[k] && c[k].length < 32)
-      throw new AppError("CONFIG_INVALID", `${k} 至少需要 32 位。`, 503);
-  let costs: Record<string, string>;
-  try {
-    costs = z.record(z.string().regex(/^[A-Z0-9]+$/), amount).parse(JSON.parse(c.COST_BASIS_JSON));
-  } catch {
-    throw new AppError(
-      "CONFIG_INVALID",
-      'COST_BASIS_JSON 应为币种到成本字符串的 JSON，例如 {"BTC":"58000"}。',
-      503,
-    );
+const demoSalt = "8b31a42e977553eabbc9954e16f55a11";
+const demoHash = `scrypt$${demoSalt}$${scryptSync("demo123456", demoSalt, 64).toString("hex")}`;
+export const DEMO_CONFIG = {
+  accounts: [{ id: "demo", label: "演示现货账户", source: "demo" as const }],
+  users: [{ username: "demo", displayName: "演示用户", passwordHash: demoHash, accountId: "demo" }],
+};
+export type AppConfig = {
+  accounts: AccountSettings[];
+  users: PortalUser[];
+  sessionSecret: string;
+  databaseUrl: string;
+  cronSecret: string;
+  builtInDemo: boolean;
+};
+export function getAppConfig(): AppConfig {
+  // Private local config is read at runtime, never traced into deployment bundles.
+  const file = resolve(
+    /*turbopackIgnore: true*/ process.env.PORTAL_CONFIG_FILE || ".slzb/accounts.json",
+  );
+  let raw = process.env.PORTAL_CONFIG_JSON;
+  if (!raw && (process.env.PORTAL_CONFIG_FILE || existsSync(/*turbopackIgnore: true*/ file))) {
+    try {
+      raw = readFileSync(/*turbopackIgnore: true*/ file, "utf8");
+    } catch {
+      throw new AppError("CONFIG_INVALID", "账户服务配置暂不可用，请联系管理员。", 503);
+    }
   }
-  const perf = [
-    c.PERFORMANCE_BASELINE_USDT,
-    c.PERFORMANCE_BASELINE_AT,
-    c.PERFORMANCE_NET_FLOWS_USDT,
-  ];
-  if (perf.some((v) => v !== undefined) && !perf.every((v) => v !== undefined))
-    throw new AppError(
-      "CONFIG_INVALID",
-      "累计盈亏需要同时设置起始净值、起始时间和期间净入金。",
-      503,
-    );
-  if (c.PERFORMANCE_BASELINE_AT && Date.parse(c.PERFORMANCE_BASELINE_AT) > Date.now())
-    throw new AppError("CONFIG_INVALID", "盈亏起始时间不能晚于当前时间。", 503);
-  return { ...c, symbols, costs };
+  if (
+    !raw &&
+    (process.env.DATA_SOURCE === "binance" ||
+      process.env.BINANCE_API_KEY ||
+      process.env.BINANCE_API_SECRET ||
+      process.env.PORTAL_PASSWORD ||
+      process.env.MONITOR_API_TOKEN)
+  )
+    throw new AppError("CONFIG_MIGRATION", "管理员需要将旧单账户配置迁移到多用户配置。", 503);
+  const builtInDemo = !raw;
+  let parsed: ReturnType<typeof portalConfigSchema.parse>;
+  try {
+    parsed = portalConfigSchema.parse(raw ? JSON.parse(raw) : DEMO_CONFIG);
+  } catch {
+    throw new AppError("CONFIG_INVALID", "账户服务配置暂不可用，请联系管理员。", 503);
+  }
+  if (!parsed.accounts.length || !parsed.users.length)
+    throw new AppError("CONFIG_MISSING", "查看账号尚未开通，请联系管理员。", 503);
+  const sessionSecret =
+    process.env.SESSION_SECRET ||
+    (builtInDemo ? "slzb-public-demo-session-secret-not-for-real-accounts" : "");
+  if (sessionSecret.length < 32)
+    throw new AppError("CONFIG_INVALID", "账户服务配置暂不可用，请联系管理员。", 503);
+  const cronSecret = process.env.CRON_SECRET || "";
+  if (cronSecret && cronSecret.length < 32)
+    throw new AppError("CONFIG_INVALID", "后台采集配置暂不可用，请联系管理员。", 503);
+  return {
+    ...parsed,
+    sessionSecret,
+    databaseUrl: process.env.DATABASE_URL || "",
+    cronSecret,
+    builtInDemo,
+  };
 }
-export type Config = ReturnType<typeof getConfig>;
+export function getAccountConfig(app: AppConfig, accountId: string) {
+  const a = app.accounts.find((account) => account.id === accountId && account.enabled);
+  if (!a) throw new AppError("UNAUTHORIZED", "账户访问已停用，请联系管理员。", 401);
+  return {
+    ACCOUNT_ID: a.id,
+    ACCOUNT_LABEL: a.label,
+    DATA_SOURCE: a.source,
+    BINANCE_ENV: a.environment,
+    BINANCE_API_KEY: a.apiKey,
+    BINANCE_API_SECRET: a.apiSecret,
+    DATABASE_URL: app.databaseUrl,
+    symbols: a.symbols,
+    costs: a.costs,
+    PERFORMANCE_BASELINE_USDT: a.performance?.baseline,
+    PERFORMANCE_BASELINE_AT: a.performance?.startedAt,
+    PERFORMANCE_NET_FLOWS_USDT: a.performance?.netFlows,
+  };
+}
+export type Config = ReturnType<typeof getAccountConfig>;

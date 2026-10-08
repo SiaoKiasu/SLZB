@@ -5,11 +5,9 @@ import {
   ArrowDownLeft,
   ArrowUpRight,
   BarChart3,
-  Check,
   ChevronLeft,
   ChevronRight,
   CircleHelp,
-  Database,
   Download,
   Eye,
   EyeOff,
@@ -19,7 +17,6 @@ import {
   LogOut,
   RefreshCw,
   Search,
-  Settings2,
   ShieldCheck,
   Wallet,
   X,
@@ -37,7 +34,7 @@ import {
   YAxis,
 } from "recharts";
 import type { Dashboard, Holding, Trade } from "@/lib/types";
-type Tab = "overview" | "holdings" | "activity" | "settings";
+type Tab = "overview" | "holdings" | "activity";
 const colors = ["#355b49", "#8da184", "#c5bc92", "#b0c6a8", "#dfdfc6", "#8eaba8"];
 const assetNames: Record<string, string> = {
   BTC: "Bitcoin",
@@ -98,17 +95,22 @@ async function api(url: string, init?: RequestInit) {
   if (!response.ok)
     throw Object.assign(new Error(data.error?.message ?? "请求失败，请稍后重试。"), {
       status: response.status,
+      demo: data.demo,
     });
   return data;
 }
 export function Portal() {
   const [session, setSession] = useState<"loading" | "login" | "ready" | "error">("loading");
-  const [protectedSession, setProtected] = useState(false);
+  const [username, setUsername] = useState("");
+  const [viewer, setViewer] = useState<{ username: string; displayName: string } | null>(null);
+  const [demoLogin, setDemoLogin] = useState(false);
   const [password, setPassword] = useState("");
   const [data, setData] = useState<Dashboard | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const loading = useRef(false);
+  const generation = useRef(0);
+  const authChannel = useRef<BroadcastChannel | null>(null);
   const [tab, setTab] = useState<Tab>("overview");
   const [hidden, setHidden] = useState(false);
   const [period, setPeriod] = useState(7);
@@ -116,19 +118,27 @@ export function Portal() {
   const [side, setSide] = useState("ALL");
   const [page, setPage] = useState(1);
   const [showSmall, setShowSmall] = useState(true);
-  const [notice, setNotice] = useState(false);
   const [now, setNow] = useState(Date.now());
   const checkSession = useCallback(async () => {
+    const current = ++generation.current;
+    loading.current = false;
+    setData(null);
+    setViewer(null);
     setSession("loading");
     setError("");
     try {
       const s = await api("/api/session");
-      setProtected(s.passwordProtected);
+      if (generation.current !== current) return;
+      setViewer(s.user);
+      setDemoLogin(s.demo);
       setSession("ready");
     } catch (e) {
-      const err = e as Error & { status?: number };
-      if (err.status === 401) setSession("login");
-      else {
+      if (generation.current !== current) return;
+      const err = e as Error & { status?: number; demo?: boolean };
+      if (err.status === 401) {
+        setDemoLogin(Boolean(err.demo));
+        setSession("login");
+      } else {
         setError(err.message);
         setSession("error");
       }
@@ -137,24 +147,42 @@ export function Portal() {
   const load = useCallback(async () => {
     if (loading.current) return;
     loading.current = true;
+    const current = generation.current;
     setBusy(true);
     try {
-      setData(await api("/api/sync", { method: "POST" }));
+      const next = await api("/api/sync", { method: "POST" });
+      if (generation.current !== current) return;
+      setData(next);
       setError("");
     } catch (e) {
-      const err = e as Error & { status?: number };
+      if (generation.current !== current) return;
+      const err = e as Error & { status?: number; demo?: boolean };
       if (err.status === 401) {
         setSession("login");
         setData(null);
       }
       setError(err.message);
     } finally {
-      loading.current = false;
-      setBusy(false);
+      if (generation.current === current) {
+        loading.current = false;
+        setBusy(false);
+      }
     }
   }, []);
   useEffect(() => {
     void checkSession();
+  }, [checkSession]);
+  useEffect(() => {
+    if (typeof BroadcastChannel === "undefined") return;
+    const channel = new BroadcastChannel("slzb-session");
+    authChannel.current = channel;
+    channel.onmessage = () => {
+      void checkSession();
+    };
+    return () => {
+      channel.close();
+      authChannel.current = null;
+    };
   }, [checkSession]);
   useEffect(() => {
     if (session !== "ready") return;
@@ -173,13 +201,17 @@ export function Portal() {
     setBusy(true);
     setError("");
     try {
-      await api("/api/session", {
+      const result = await api("/api/session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password }),
+        body: JSON.stringify({ username, password }),
       });
+      generation.current++;
+      loading.current = false;
       setPassword("");
-      setProtected(true);
+      setViewer(result.user);
+      authChannel.current?.postMessage("changed");
+      setData(null);
       setSession("ready");
     } catch (e) {
       setError((e as Error).message);
@@ -190,7 +222,12 @@ export function Portal() {
   async function logout() {
     try {
       await api("/api/session", { method: "DELETE" });
+      generation.current++;
+      loading.current = false;
+      setBusy(false);
+      authChannel.current?.postMessage("changed");
       setData(null);
+      setViewer(null);
       setSession("login");
       setError("");
     } catch (e) {
@@ -251,28 +288,48 @@ export function Portal() {
               {session === "login"
                 ? "欢迎回到账户观察室"
                 : session === "error"
-                  ? "完成连接配置"
+                  ? "账户服务暂不可用"
                   : "正在打开账户观察室"}
             </h2>
-            <p>通过访问密码，安全查看账户动态。</p>
+            <p>使用管理员提供的用户名和密码登录。</p>
             {session === "login" && (
               <form onSubmit={login}>
-                <label htmlFor="password">访问密码</label>
+                <label htmlFor="username">用户名</label>
+                <input
+                  id="username"
+                  type="text"
+                  autoFocus
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  autoComplete="username"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  required
+                  placeholder="输入你的用户名"
+                />
+                <label htmlFor="password">密码</label>
                 <input
                   id="password"
-                  autoFocus
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   autoComplete="current-password"
                   required
-                  placeholder="输入账户访问密码"
+                  placeholder="输入你的密码"
                 />
                 <button className="button primary full" disabled={busy}>
                   {busy ? <LoaderCircle className="spin" size={16} /> : <ArrowUpRight size={16} />}
                   进入账户
                 </button>
               </form>
+            )}
+            {session === "login" && (
+              <p className="session-note">登录状态会自动保留，下次打开即可继续查看。</p>
+            )}
+            {session === "login" && demoLogin && (
+              <div className="demo-login">
+                演示账号 <strong>demo</strong> · 密码 <strong>demo123456</strong>
+              </div>
             )}
             {session === "loading" && <LoaderCircle className="spin" />}
             {error && (
@@ -282,10 +339,7 @@ export function Portal() {
             )}
             {session === "error" && (
               <>
-                <p className="help-text">
-                  在 Vercel 环境变量或本地 .env.local
-                  中完成配置后，重新部署或重启服务。首次体验可设置 DATA_SOURCE=demo。
-                </p>
+                <p className="help-text">请联系管理员检查账户服务，然后重新尝试登录。</p>
                 <button className="button" onClick={checkSession}>
                   <RefreshCw size={15} />
                   重新检查
@@ -294,7 +348,7 @@ export function Portal() {
             )}
             <div className="login-note">
               <ShieldCheck size={16} />
-              仅用于查看 · API 密钥保留在服务端
+              仅用于查看 · 账户由管理员统一管理
             </div>
           </div>
         </div>
@@ -370,7 +424,6 @@ export function Portal() {
     overview: "账户总览",
     holdings: "资产持仓",
     activity: "交易记录",
-    settings: "连接与设置",
   }[tab];
   return (
     <div className="shell">
@@ -391,7 +444,6 @@ export function Portal() {
               { id: "overview", label: "账户总览", icon: LayoutDashboard },
               { id: "holdings", label: "资产持仓", icon: Wallet },
               { id: "activity", label: "交易记录", icon: Activity },
-              { id: "settings", label: "连接与设置", icon: Settings2 },
             ] as const
           ).map((item) => (
             <button
@@ -415,24 +467,13 @@ export function Portal() {
               资产始终在你的交易所
             </p>
           </div>
-          <button
-            className="help-button"
-            onClick={() => {
-              navigate("settings");
-              setNotice(true);
-            }}
-          >
-            <CircleHelp size={16} />
-            接入指南
-            <ArrowUpRight size={14} />
-          </button>
           <div className="profile">
             <span className="avatar">S</span>
             <div>
-              <strong>{data?.accountLabel ?? "我的账户"}</strong>
-              <small>PRIVATE WORKSPACE</small>
+              <strong>{viewer?.displayName ?? "我的账户"}</strong>
+              <small>{viewer?.username}</small>
             </div>
-            {protectedSession && (
+            {viewer && (
               <button className="icon-button" onClick={logout} aria-label="退出登录">
                 <LogOut size={16} />
               </button>
@@ -452,7 +493,7 @@ export function Portal() {
               只读访问
             </span>
             <span className="avatar small">S</span>
-            {protectedSession && (
+            {viewer && (
               <button className="icon-button" onClick={logout} aria-label="退出账户">
                 <LogOut size={15} />
               </button>
@@ -473,7 +514,9 @@ export function Portal() {
                   {hidden ? <EyeOff size={19} /> : <Eye size={19} />}
                 </button>
               </h1>
-              <p>掌握资产全貌，跟上每一笔变化。</p>
+              <p>
+                {data ? `${data.accountLabel} · 专属只读视图` : "掌握资产全貌，跟上每一笔变化。"}
+              </p>
             </div>
             <div className="heading-actions">
               <Badge
@@ -504,11 +547,8 @@ export function Portal() {
           {data?.source === "demo" && (
             <div className="demo-banner">
               <span>
-                <span className="demo-label">DEMO</span>当前为模拟账户。准备好后，接入你的真实资产。
+                <span className="demo-label">DEMO</span>当前为模拟账户，所有数据仅供预览。
               </span>
-              <button onClick={() => navigate("settings")}>
-                连接账户 <ArrowUpRight size={14} />
-              </button>
             </div>
           )}
           {!data ? (
@@ -523,7 +563,7 @@ export function Portal() {
                 <>
                   <Wallet size={30} />
                   <h3>暂时无法加载账户</h3>
-                  <p>请检查连接配置，然后点击刷新数据。</p>
+                  <p>请稍后刷新，如仍无法加载，请联系管理员。</p>
                 </>
               )}
             </div>
@@ -558,13 +598,13 @@ export function Portal() {
                     </div>
                     <div className="stat-note">
                       {data.summary.totalPnl === null
-                        ? "配置起始本金与资金流水后显示"
+                        ? "管理员设定统计口径后显示"
                         : `起始净值 ${money(data.summary.baseline)} · 手工资金口径`}
                     </div>
                   </div>
                   <div className="stat">
                     <div className="stat-label">
-                      已配置成本持仓浮盈亏
+                      已知成本持仓浮盈亏
                       <BarChart3 size={17} />
                     </div>
                     <div
@@ -574,7 +614,7 @@ export function Portal() {
                       <span>USDT</span>
                     </div>
                     <div className="stat-note">
-                      覆盖 {data.summary.costCoverage} 种资产 · 基于配置成本
+                      覆盖 {data.summary.costCoverage} 种资产 · 基于管理员成本口径
                     </div>
                   </div>
                   <div className="stat">
@@ -762,7 +802,7 @@ export function Portal() {
                       </strong>
                     </div>
                     <p>
-                      每个配置交易对最近 100 笔成交。
+                      每个监控交易对最近 100 笔成交。
                       <br />
                       手续费按原币种展示。
                     </p>
@@ -894,20 +934,8 @@ export function Portal() {
                   </section>
                 </>
               )}
-              {tab === "settings" && (
-                <Settings
-                  data={data}
-                  notice={notice}
-                  onDismiss={() => setNotice(false)}
-                  onTest={load}
-                  busy={busy}
-                />
-              )}
               {data.warnings.length > 0 && (
-                <details
-                  className="data-notes"
-                  open={tab === "settings" || Boolean(data.summary.unpricedAssets)}
-                >
+                <details className="data-notes" open={Boolean(data.summary.unpricedAssets)}>
                   <summary>
                     <CircleHelp size={15} />
                     数据说明与覆盖范围 <span>{data.warnings.length}</span>
@@ -1028,7 +1056,7 @@ function HoldingTable({
                   {profit(h.unrealizedPnl)}
                 </strong>
                 <small>
-                  {h.averageCost === null ? "待配置成本" : `成本 ${money(h.averageCost)}`}
+                  {h.averageCost === null ? "暂无成本数据" : `成本 ${money(h.averageCost)}`}
                 </small>
               </td>
               <td>
@@ -1086,9 +1114,7 @@ function TradeTable({ trades, hidden }: { trades: Trade[]; hidden: boolean }) {
           ))}
         </tbody>
       </table>
-      {!trades.length && (
-        <div className="empty">暂无匹配成交。真实账户请确认已配置对应交易对。</div>
-      )}
+      {!trades.length && <div className="empty">暂无匹配成交。</div>}
     </div>
   );
 }
@@ -1119,7 +1145,7 @@ function EquityChart({
         <p>
           {data.connection.database
             ? "积累两个时间点后，资产走势将在这里显示。"
-            : "连接数据库后，可持续记录账户净值。"}
+            : "历史净值尚未启用，请联系管理员。"}
         </p>
       </div>
     );
@@ -1174,201 +1200,6 @@ function EquityChart({
           />
         </AreaChart>
       </ResponsiveContainer>
-    </div>
-  );
-}
-function Settings({
-  data,
-  notice,
-  onDismiss,
-  onTest,
-  busy,
-}: {
-  data: Dashboard;
-  notice: boolean;
-  onDismiss: () => void;
-  onTest: () => void;
-  busy: boolean;
-}) {
-  return (
-    <div className="settings-grid">
-      <section className="panel">
-        <div className="panel-heading">
-          <div>
-            <h2>账户连接</h2>
-            <p>一个账户，一处清晰的资产视图</p>
-          </div>
-          <ShieldCheck size={22} className="positive" />
-        </div>
-        <div className="settings-content">
-          <div className="exchange-card">
-            <div className="exchange-logo">◇</div>
-            <div>
-              <h3>{data.environment}</h3>
-              <p>{data.accountLabel}</p>
-            </div>
-            <Badge muted={data.source === "demo"}>
-              {data.source === "demo" ? "模拟数据" : "已连接"}
-            </Badge>
-          </div>
-          <dl className="settings-list">
-            <div>
-              <dt>访问模式</dt>
-              <dd>只读查询</dd>
-            </div>
-            <div>
-              <dt>自动刷新</dt>
-              <dd>60 秒 / 页面可见时</dd>
-            </div>
-            <div>
-              <dt>净值存储</dt>
-              <dd>
-                {data.source === "demo"
-                  ? "模拟曲线"
-                  : data.connection.snapshotsSaved
-                    ? "已保存至数据库"
-                    : data.connection.database
-                      ? "数据库已配置 · 本次未保存"
-                      : "尚未配置"}
-              </dd>
-            </div>
-            <div>
-              <dt>最近同步</dt>
-              <dd>{time(data.updatedAt)}</dd>
-            </div>
-            <div>
-              <dt>成交交易对</dt>
-              <dd className="symbol-tags">
-                {data.connection.symbols.map((s) => (
-                  <span key={s}>{s}</span>
-                ))}
-              </dd>
-            </div>
-          </dl>
-          <button className="button primary" onClick={onTest} disabled={busy}>
-            <RefreshCw size={15} className={busy ? "spin" : ""} />
-            {busy ? "正在检查" : "测试连接并刷新"}
-          </button>
-        </div>
-      </section>
-      <section className="panel">
-        <div className="panel-heading">
-          <div>
-            <h2>接入真实账户</h2>
-            <p>在服务端完成配置，朋友只需登录查看</p>
-          </div>
-          {notice && (
-            <button className="icon-button" onClick={onDismiss} aria-label="关闭提示">
-              <X size={16} />
-            </button>
-          )}
-        </div>
-        <div className="settings-content">
-          <ol className="setup-steps">
-            <li>
-              <span>01</span>
-              <div>
-                <strong>创建 Binance 只读 API</strong>
-                <p>仅开启读取权限。请勿开启交易或提现权限，使用 HMAC 类型密钥。</p>
-              </div>
-            </li>
-            <li>
-              <span>02</span>
-              <div>
-                <strong>填写 Vercel 环境变量</strong>
-                <p>
-                  设置 DATA_SOURCE=binance、API Key / Secret，以及访问密码和会话密钥。完整模板见项目
-                  .env.example。
-                </p>
-              </div>
-            </li>
-            <li>
-              <span>03</span>
-              <div>
-                <strong>重新部署并测试连接</strong>
-                <p>
-                  修改环境变量后重新部署；本地测试则重启开发服务。确认监控交易对包含已清仓币种。
-                </p>
-              </div>
-            </li>
-          </ol>
-          <div className="info-box">
-            <LockKeyhole size={16} />
-            <p>API Secret 只在服务端保存。这里不会读取、展示或存储你的密钥。</p>
-          </div>
-        </div>
-      </section>
-      <section className="panel">
-        <div className="panel-heading">
-          <div>
-            <h2>盈亏计算口径</h2>
-            <p>把账户表现与资金流动分开看</p>
-          </div>
-          <BarChart3 size={20} />
-        </div>
-        <div className="settings-content">
-          <div className="formula">累计盈亏 = 当前净值 − 起始净值 − 期间净入金</div>
-          <p className="help-text">
-            使用 PERFORMANCE_BASELINE_USDT、PERFORMANCE_BASELINE_AT 和 PERFORMANCE_NET_FLOWS_USDT
-            设置统计起点。净入金包括充值、提现、内部转账，发生变化后需手工更新。
-          </p>
-          <dl className="settings-list">
-            <div>
-              <dt>统计起始时间</dt>
-              <dd>
-                {data.summary.baselineAt ? time(Date.parse(data.summary.baselineAt)) : "待配置"}
-              </dd>
-            </div>
-            <div>
-              <dt>持仓浮盈亏</dt>
-              <dd>数量 ×（当前价格 − 配置成本）</dd>
-            </div>
-          </dl>
-          <p className="help-text">
-            COST_BASIS_JSON
-            设置当前剩余持仓的平均成本（含费用），交易或转账后需要维护。本版不将有限成交记录推断为全历史成本，也不提供自动已实现盈亏。
-          </p>
-        </div>
-      </section>
-      <section className="panel">
-        <div className="panel-heading">
-          <div>
-            <h2>历史净值与更新</h2>
-            <p>从接入那一刻，开始积累</p>
-          </div>
-          <Database size={20} />
-        </div>
-        <div className="settings-content">
-          <div className="feature-line">
-            <Check size={17} />
-            <div>
-              <strong>实时查看无需数据库</strong>
-              <p>配置 API 即可查询现货持仓、成交和挂单。</p>
-            </div>
-          </div>
-          <div className="feature-line">
-            <Check size={17} />
-            <div>
-              <strong>Neon Postgres 保存净值</strong>
-              <p>设置 DATABASE_URL 后自动建表。五分钟一个快照时间桶，走势图展示近 90 天。</p>
-            </div>
-          </div>
-          <div className="feature-line">
-            <Check size={17} />
-            <div>
-              <strong>关闭页面后也能记录</strong>
-              <p>
-                设置 CRON_SECRET。默认 Vercel Cron
-                每天运行一次；更高频后台采集需相应套餐或外部调度。
-              </p>
-            </div>
-          </div>
-          <p className="help-text">
-            部署区默认 Frankfurt。连接失败时核对 Binance 对账户所在地区的规则和出口 IP；严格 IP
-            白名单需要固定出口网络。
-          </p>
-        </div>
-      </section>
     </div>
   );
 }

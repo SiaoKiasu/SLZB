@@ -1701,3 +1701,22 @@ td small.inline {
     scroll-behavior: auto !important;
   }
 }
+
+.session-note {
+  font-size: 10px;
+  color: #8b9980;
+  margin-top: 16px;
+  line-height: 1.8;
+}
+.demo-login {
+  background: #edf2e5;
+  border: 1px solid #e0e8d4;
+  border-radius: 6px;
+  margin-top: 16px;
+  padding: 11px;
+  font-size: 10px;
+  color: #6c815a;
+}
+.demo-login strong {
+  margin: 0 4px;
+}

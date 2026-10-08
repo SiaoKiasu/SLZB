@@ -2,20 +2,31 @@
   "openapi": "3.1.0",
   "info": {
     "title": "SLZB Spot Monitor",
-    "version": "0.1.0",
-    "description": "单账户只读现货监控。金额为十进制字符串；缺失金额为 null。完整口径见 API.md。"
+    "version": "0.2.0",
+    "description": "多用户只读现货监控：管理员配置绑定，每个登录用户只读取自己的账户。持久 Cookie 自动续期。"
   },
   "servers": [
-    { "url": "http://localhost:3000", "description": "Local; replace with your deployment URL" }
+    {
+      "url": "http://localhost:3000",
+      "description": "Local; replace with your deployment URL"
+    }
   ],
-  "security": [{ "sessionCookie": [] }, { "apiBearer": [] }],
+  "security": [
+    {
+      "sessionCookie": []
+    }
+  ],
   "paths": {
     "/api/health": {
       "get": {
         "operationId": "health",
         "summary": "服务存活检查",
         "security": [],
-        "responses": { "200": { "description": "Service running" } }
+        "responses": {
+          "200": {
+            "description": "Service running"
+          }
+        }
       }
     },
     "/api/session": {
@@ -23,38 +34,68 @@
         "operationId": "session",
         "summary": "验证会话",
         "responses": {
-          "200": { "description": "Authenticated" },
-          "401": { "$ref": "#/components/responses/Error" }
+          "200": {
+            "description": "Authenticated"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       },
       "post": {
         "operationId": "login",
-        "summary": "密码登录（同源 Origin 必需）",
+        "summary": "用户名及密码登录（同源 Origin 必需）",
         "security": [],
-        "parameters": [{ "$ref": "#/components/parameters/Origin" }],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Origin"
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["password"],
-                "properties": { "password": { "type": "string", "format": "password" } }
+                "required": ["username", "password"],
+                "properties": {
+                  "password": {
+                    "type": "string",
+                    "format": "password"
+                  },
+                  "username": {
+                    "type": "string"
+                  }
+                }
               }
             }
           }
         },
         "responses": {
-          "200": { "description": "Sets slzb_session cookie" },
-          "401": { "$ref": "#/components/responses/Error" },
-          "429": { "$ref": "#/components/responses/Error" }
+          "200": {
+            "description": "User info and persistent HttpOnly slzb_session cookie; Max-Age=31536000; rolls forward after one day of activity."
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       },
       "delete": {
         "operationId": "logout",
         "summary": "清除会话（同源 Origin 必需）",
-        "parameters": [{ "$ref": "#/components/parameters/Origin" }],
-        "responses": { "200": { "description": "Cookie cleared" } }
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Origin"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cookie cleared"
+          }
+        }
       }
     },
     "/api/dashboard": {
@@ -65,10 +106,16 @@
           "200": {
             "description": "Dashboard",
             "content": {
-              "application/json": { "schema": { "$ref": "#/components/schemas/Dashboard" } }
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Dashboard"
+                }
+              }
             }
           },
-          "default": { "$ref": "#/components/responses/Error" }
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
@@ -86,16 +133,24 @@
                   "properties": {
                     "data": {
                       "type": "array",
-                      "items": { "$ref": "#/components/schemas/Holding" }
+                      "items": {
+                        "$ref": "#/components/schemas/Holding"
+                      }
                     },
-                    "updatedAt": { "type": "integer" },
-                    "warnings": { "$ref": "#/components/schemas/Warnings" }
+                    "updatedAt": {
+                      "type": "integer"
+                    },
+                    "warnings": {
+                      "$ref": "#/components/schemas/Warnings"
+                    }
                   }
                 }
               }
             }
           },
-          "default": { "$ref": "#/components/responses/Error" }
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
@@ -111,15 +166,23 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "data": { "$ref": "#/components/schemas/Summary" },
-                    "updatedAt": { "type": "integer" },
-                    "warnings": { "$ref": "#/components/schemas/Warnings" }
+                    "data": {
+                      "$ref": "#/components/schemas/Summary"
+                    },
+                    "updatedAt": {
+                      "type": "integer"
+                    },
+                    "warnings": {
+                      "$ref": "#/components/schemas/Warnings"
+                    }
                   }
                 }
               }
             }
           },
-          "default": { "$ref": "#/components/responses/Error" }
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
@@ -131,19 +194,29 @@
           {
             "name": "symbol",
             "in": "query",
-            "schema": { "type": "string" },
+            "schema": {
+              "type": "string"
+            },
             "description": "Must be in TRACKED_SYMBOLS"
           },
           {
             "name": "fromId",
             "in": "query",
-            "schema": { "type": "string", "pattern": "^[0-9]{1,16}$" },
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{1,16}$"
+            },
             "description": "Requires symbol. Use 0 to begin forward pagination."
           },
           {
             "name": "limit",
             "in": "query",
-            "schema": { "type": "integer", "minimum": 1, "maximum": 1000, "default": 100 },
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000,
+              "default": 100
+            },
             "description": "Requires symbol"
           }
         ],
@@ -155,17 +228,32 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "data": { "type": "array", "items": { "$ref": "#/components/schemas/Trade" } },
-                    "nextFromId": { "type": ["string", "null"] },
-                    "coverage": { "type": "string" },
-                    "updatedAt": { "type": "integer" },
-                    "warnings": { "$ref": "#/components/schemas/Warnings" }
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Trade"
+                      }
+                    },
+                    "nextFromId": {
+                      "type": ["string", "null"]
+                    },
+                    "coverage": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "integer"
+                    },
+                    "warnings": {
+                      "$ref": "#/components/schemas/Warnings"
+                    }
                   }
                 }
               }
             }
           },
-          "default": { "$ref": "#/components/responses/Error" }
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
@@ -181,15 +269,26 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "data": { "type": "array", "items": { "$ref": "#/components/schemas/Order" } },
-                    "updatedAt": { "type": "integer" },
-                    "warnings": { "$ref": "#/components/schemas/Warnings" }
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Order"
+                      }
+                    },
+                    "updatedAt": {
+                      "type": "integer"
+                    },
+                    "warnings": {
+                      "$ref": "#/components/schemas/Warnings"
+                    }
                   }
                 }
               }
             }
           },
-          "default": { "$ref": "#/components/responses/Error" }
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
@@ -207,16 +306,24 @@
                   "properties": {
                     "data": {
                       "type": "array",
-                      "items": { "$ref": "#/components/schemas/Snapshot" }
+                      "items": {
+                        "$ref": "#/components/schemas/Snapshot"
+                      }
                     },
-                    "updatedAt": { "type": "integer" },
-                    "warnings": { "$ref": "#/components/schemas/Warnings" }
+                    "updatedAt": {
+                      "type": "integer"
+                    },
+                    "warnings": {
+                      "$ref": "#/components/schemas/Warnings"
+                    }
                   }
                 }
               }
             }
           },
-          "default": { "$ref": "#/components/responses/Error" }
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
@@ -234,24 +341,36 @@
                   "properties": {
                     "data": {
                       "allOf": [
-                        { "$ref": "#/components/schemas/Connection" },
+                        {
+                          "$ref": "#/components/schemas/Connection"
+                        },
                         {
                           "type": "object",
                           "properties": {
-                            "source": { "type": "string" },
-                            "environment": { "type": "string" }
+                            "source": {
+                              "type": "string"
+                            },
+                            "environment": {
+                              "type": "string"
+                            }
                           }
                         }
                       ]
                     },
-                    "updatedAt": { "type": "integer" },
-                    "warnings": { "$ref": "#/components/schemas/Warnings" }
+                    "updatedAt": {
+                      "type": "integer"
+                    },
+                    "warnings": {
+                      "$ref": "#/components/schemas/Warnings"
+                    }
                   }
                 }
               }
             }
           },
-          "default": { "$ref": "#/components/responses/Error" }
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
@@ -259,35 +378,68 @@
       "post": {
         "operationId": "sync",
         "summary": "同步数据并尝试保存快照；Cookie 调用需要同源 Origin",
-        "parameters": [{ "$ref": "#/components/parameters/Origin" }],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Origin"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Dashboard; check connection.snapshotsSaved",
             "content": {
-              "application/json": { "schema": { "$ref": "#/components/schemas/Dashboard" } }
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Dashboard"
+                }
+              }
             }
           },
-          "default": { "$ref": "#/components/responses/Error" }
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
     "/api/cron": {
       "get": {
         "operationId": "cron",
-        "summary": "后台保存净值快照",
-        "security": [{ "cronBearer": [] }],
+        "summary": "管理员后台采集启用的真实账户",
+        "security": [
+          {
+            "cronBearer": []
+          }
+        ],
         "responses": {
-          "200": { "description": "Snapshot saved" },
-          "401": { "$ref": "#/components/responses/Error" },
-          "503": { "$ref": "#/components/responses/Error" }
-        }
+          "200": {
+            "description": "All requested snapshots saved; includes results per account."
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "accountId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Optional administrator-only account filter; user routes cannot select an account."
+          }
+        ]
       }
     }
   },
   "components": {
     "securitySchemes": {
-      "sessionCookie": { "type": "apiKey", "in": "cookie", "name": "slzb_session" },
-      "apiBearer": { "type": "http", "scheme": "bearer", "description": "MONITOR_API_TOKEN" },
+      "sessionCookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "slzb_session"
+      },
       "cronBearer": {
         "type": "http",
         "scheme": "bearer",
@@ -298,8 +450,11 @@
       "Origin": {
         "name": "Origin",
         "in": "header",
-        "schema": { "type": "string", "format": "uri" },
-        "description": "Required for cookie-based writes; must equal request origin. Verified API Bearer is exempt."
+        "schema": {
+          "type": "string",
+          "format": "uri"
+        },
+        "description": "Cookie 写请求必须携带与服务地址一致的 Origin。"
       }
     },
     "responses": {
@@ -314,7 +469,14 @@
                 "error": {
                   "type": "object",
                   "required": ["code", "message"],
-                  "properties": { "code": { "type": "string" }, "message": { "type": "string" } }
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  }
                 }
               }
             }
@@ -331,101 +493,236 @@
         "type": ["string", "null"],
         "description": "null means unknown, never zero"
       },
-      "Warnings": { "type": "array", "items": { "type": "string" } },
+      "Warnings": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
       "Holding": {
         "type": "object",
         "properties": {
-          "asset": { "type": "string" },
-          "free": { "$ref": "#/components/schemas/Amount" },
-          "locked": { "$ref": "#/components/schemas/Amount" },
-          "quantity": { "$ref": "#/components/schemas/Amount" },
-          "price": { "$ref": "#/components/schemas/NullableAmount" },
-          "value": { "$ref": "#/components/schemas/NullableAmount" },
-          "allocation": { "type": "number" },
-          "change24h": { "type": ["number", "null"] },
-          "averageCost": { "$ref": "#/components/schemas/NullableAmount" },
-          "unrealizedPnl": { "$ref": "#/components/schemas/NullableAmount" }
+          "asset": {
+            "type": "string"
+          },
+          "free": {
+            "$ref": "#/components/schemas/Amount"
+          },
+          "locked": {
+            "$ref": "#/components/schemas/Amount"
+          },
+          "quantity": {
+            "$ref": "#/components/schemas/Amount"
+          },
+          "price": {
+            "$ref": "#/components/schemas/NullableAmount"
+          },
+          "value": {
+            "$ref": "#/components/schemas/NullableAmount"
+          },
+          "allocation": {
+            "type": "number"
+          },
+          "change24h": {
+            "type": ["number", "null"]
+          },
+          "averageCost": {
+            "$ref": "#/components/schemas/NullableAmount"
+          },
+          "unrealizedPnl": {
+            "$ref": "#/components/schemas/NullableAmount"
+          }
         }
       },
       "Trade": {
         "type": "object",
         "properties": {
-          "id": { "type": "string" },
-          "symbol": { "type": "string" },
-          "side": { "enum": ["BUY", "SELL"] },
-          "price": { "$ref": "#/components/schemas/Amount" },
-          "quantity": { "$ref": "#/components/schemas/Amount" },
-          "quoteQuantity": { "$ref": "#/components/schemas/Amount" },
-          "fee": { "$ref": "#/components/schemas/Amount" },
-          "feeAsset": { "type": "string" },
-          "time": { "type": "integer" },
-          "isMaker": { "type": "boolean" }
+          "id": {
+            "type": "string"
+          },
+          "symbol": {
+            "type": "string"
+          },
+          "side": {
+            "enum": ["BUY", "SELL"]
+          },
+          "price": {
+            "$ref": "#/components/schemas/Amount"
+          },
+          "quantity": {
+            "$ref": "#/components/schemas/Amount"
+          },
+          "quoteQuantity": {
+            "$ref": "#/components/schemas/Amount"
+          },
+          "fee": {
+            "$ref": "#/components/schemas/Amount"
+          },
+          "feeAsset": {
+            "type": "string"
+          },
+          "time": {
+            "type": "integer"
+          },
+          "isMaker": {
+            "type": "boolean"
+          }
         }
       },
       "Order": {
         "type": "object",
         "properties": {
-          "id": { "type": "string" },
-          "symbol": { "type": "string" },
-          "side": { "enum": ["BUY", "SELL"] },
-          "type": { "type": "string" },
-          "price": { "$ref": "#/components/schemas/Amount" },
-          "quantity": { "$ref": "#/components/schemas/Amount" },
-          "executedQuantity": { "$ref": "#/components/schemas/Amount" },
-          "status": { "type": "string" },
-          "time": { "type": "integer" }
+          "id": {
+            "type": "string"
+          },
+          "symbol": {
+            "type": "string"
+          },
+          "side": {
+            "enum": ["BUY", "SELL"]
+          },
+          "type": {
+            "type": "string"
+          },
+          "price": {
+            "$ref": "#/components/schemas/Amount"
+          },
+          "quantity": {
+            "$ref": "#/components/schemas/Amount"
+          },
+          "executedQuantity": {
+            "$ref": "#/components/schemas/Amount"
+          },
+          "status": {
+            "type": "string"
+          },
+          "time": {
+            "type": "integer"
+          }
         }
       },
       "Snapshot": {
         "type": "object",
         "properties": {
-          "time": { "type": "integer" },
-          "equity": { "$ref": "#/components/schemas/Amount" }
+          "time": {
+            "type": "integer"
+          },
+          "equity": {
+            "$ref": "#/components/schemas/Amount"
+          }
         }
       },
       "Summary": {
         "type": "object",
         "properties": {
-          "equity": { "$ref": "#/components/schemas/Amount" },
-          "pricedAssets": { "type": "integer" },
-          "unpricedAssets": { "type": "integer" },
-          "unrealizedPnl": { "$ref": "#/components/schemas/NullableAmount" },
-          "costCoverage": { "type": "integer" },
-          "totalPnl": { "$ref": "#/components/schemas/NullableAmount" },
-          "baseline": { "$ref": "#/components/schemas/NullableAmount" },
-          "baselineAt": { "type": ["string", "null"], "format": "date-time" },
-          "netFlows": { "$ref": "#/components/schemas/NullableAmount" },
-          "stablecoinValue": { "$ref": "#/components/schemas/Amount" },
-          "tradeCount": { "type": "integer" }
+          "equity": {
+            "$ref": "#/components/schemas/Amount"
+          },
+          "pricedAssets": {
+            "type": "integer"
+          },
+          "unpricedAssets": {
+            "type": "integer"
+          },
+          "unrealizedPnl": {
+            "$ref": "#/components/schemas/NullableAmount"
+          },
+          "costCoverage": {
+            "type": "integer"
+          },
+          "totalPnl": {
+            "$ref": "#/components/schemas/NullableAmount"
+          },
+          "baseline": {
+            "$ref": "#/components/schemas/NullableAmount"
+          },
+          "baselineAt": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "netFlows": {
+            "$ref": "#/components/schemas/NullableAmount"
+          },
+          "stablecoinValue": {
+            "$ref": "#/components/schemas/Amount"
+          },
+          "tradeCount": {
+            "type": "integer"
+          }
         }
       },
       "Connection": {
         "type": "object",
         "properties": {
-          "database": { "type": "boolean" },
-          "snapshotsSaved": { "type": "boolean" },
-          "symbols": { "type": "array", "items": { "type": "string" } },
+          "database": {
+            "type": "boolean"
+          },
+          "snapshotsSaved": {
+            "type": "boolean"
+          },
+          "symbols": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "tradesComplete": {
             "type": "boolean",
             "description": "Configured symbol requests succeeded, not all historical trades"
           },
-          "ordersComplete": { "type": "boolean" }
+          "ordersComplete": {
+            "type": "boolean"
+          }
         }
       },
       "Dashboard": {
         "type": "object",
         "properties": {
-          "source": { "enum": ["demo", "binance"] },
-          "accountLabel": { "type": "string" },
-          "environment": { "type": "string" },
-          "updatedAt": { "type": "integer" },
-          "summary": { "$ref": "#/components/schemas/Summary" },
-          "holdings": { "type": "array", "items": { "$ref": "#/components/schemas/Holding" } },
-          "trades": { "type": "array", "items": { "$ref": "#/components/schemas/Trade" } },
-          "orders": { "type": "array", "items": { "$ref": "#/components/schemas/Order" } },
-          "history": { "type": "array", "items": { "$ref": "#/components/schemas/Snapshot" } },
-          "connection": { "$ref": "#/components/schemas/Connection" },
-          "warnings": { "$ref": "#/components/schemas/Warnings" }
+          "source": {
+            "enum": ["demo", "binance"]
+          },
+          "accountLabel": {
+            "type": "string"
+          },
+          "environment": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "integer"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/Summary"
+          },
+          "holdings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Holding"
+            }
+          },
+          "trades": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Trade"
+            }
+          },
+          "orders": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Order"
+            }
+          },
+          "history": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Snapshot"
+            }
+          },
+          "connection": {
+            "$ref": "#/components/schemas/Connection"
+          },
+          "warnings": {
+            "$ref": "#/components/schemas/Warnings"
+          }
         }
       }
     }

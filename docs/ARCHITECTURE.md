@@ -1,40 +1,29 @@
-# 架构
+# 多用户账户隔离
 
 ```mermaid
 flowchart LR
-  A[朋友的浏览器 / Portal] -->|Cookie 登录| B[Next.js JSON API]
-  C[外部脚本] -->|Bearer API Token| B
-  D[Vercel Cron] -->|Cron Secret| B
-  B --> E[账户聚合服务 / 30 秒实例缓存]
-  E --> F[Binance 只读适配器]
-  E --> G[Demo 适配器]
-  F -->|HMAC + GET| H[Binance Spot REST]
-  E --> I[Decimal 估值 / 配置成本与本金]
-  E --> J[(可选 Neon Postgres)]
+  A[管理员本地 npm run setup] --> B[私密配置文件 / Vercel 环境变量]
+  U[查看用户: 用户名 + 密码] --> S[持久 HttpOnly 会话]
+  S --> V[每次请求验证用户与会话版本]
+  B --> V
+  V --> C[由服务端解析绑定账户]
+  C --> E[对应账户 Binance 只读适配器]
+  C --> K[独立账户缓存]
+  C --> D[(按账户隔离的净值快照)]
+  E --> P[只读 Portal]
 ```
 
-## 模块
+- `config-schema.ts` 定义账户与用户 schema，拒绝重复 ID、重复规范化用户名、失效引用及缺密钥的真实账户。
+- `config.ts` 从服务端私密 JSON/文件加载，解析单个已授权账户为旧适配器所需 Config；自建配置不继承内置 demo 用户。
+- `scripts/manage.mjs` 仅管理员本地执行。交互式隐藏输入密钥与密码，原子写入私密文件，生成 Vercel 导出。密码使用共享 `scripts/password.mjs` 的加盐 scrypt。
+- `auth.ts` 签名会话包括用户名、有效期和用户权限版本摘要。每次校验当前用户 enabled、account enabled、密码哈希、绑定及 sessionVersion。成功请求在一天后续期至一年。
+- API 路由只把 `authorize(request).config` 交给聚合服务，从不根据查询参数/客户端 Header 选择账户。全局 API Bearer 已移除；Cron 使用独立管理员密钥。
+- `service.ts` 按账户 ID / API Key / Secret / 环境 / 交易对建立缓存键；每个账户独立 single-flight Promise，避免并发请求共享错误的结果或采集时间。
+- `storage.ts` 按账户 ID / 环境 / API Key 指纹隔离数据库 scope；同五分钟桶只让较新采集覆盖旧值。换 Key 开新 scope。
+- 前端没有管理页面，登录/退出清空旧数据。请求代数使退出或切换用户前未完成的请求不能写入新会话页面；BroadcastChannel 同步同浏览器其他标签页的登录状态。
 
-- `src/components/portal.tsx`：登录、4 个页面、图表、筛选及 CSV 导出。只消费内部 API。
-- `src/app/api/`：统一鉴权、同源校验、独立 Cron 鉴权，返回脱敏错误。
-- `src/lib/config.ts`：环境变量校验，真实模式必须有密钥和访问保护。
-- `src/lib/auth.ts`：常量时间比较、签名 Cookie、API Token 和 Origin 校验。
-- `src/lib/binance.ts`：只读 GET、服务端 HMAC、时间偏差同步、查询时限、局部失败标记。
-- `src/lib/portfolio.ts`：Decimal 金额计算、交叉报价、未知行情与成本处理。
-- `src/lib/service.ts`：适配器聚合、缓存、快照读写、客户端安全数据模型。
-- `src/lib/storage.ts`：Neon 参数化 SQL，按账户/环境/API Key 指纹隔离，幂等写入。
-- `src/lib/types.ts`：标准化 Holding、Trade、Order、Dashboard，可用于新增交易所。
+数据库仅用于净值历史，用户及凭证由管理员私密配置管理，因此不接数据库也可以启用多用户。Vercel 环境变量变更需重新部署；本地文件每请求读取。初版限定 20 账户 / 100 用户，适合小范围朋友查看，不是自助 SaaS。
 
-## 更新与存储
+HTTP Cookie 有一年滚动有效期，不是不可撤销的永久凭证。退出清除当前浏览器 Cookie；管理员撤销、停用或改密码使此前签发凭证失效。浏览器自行清 Cookie/隐私模式或一年完全不使用时需重新登录。
 
-页面每 60 秒调用 `POST /api/sync`；不可见时暂停。后端每实例最多合并 30 秒内的聚合请求，不提供跨实例共享缓存。持仓估值与交易所请求不构成原子快照，价格/余额可能有短暂时间差。
-
-Binance 适配器总查询预算约 40 秒，每个 HTTP 请求最多 10 秒。成交两路并发，超时则报告未同步交易对。数据库单次请求 5 秒超时，失败提示；Vercel route `maxDuration=60`。大量交易对或多个访问者可能增加请求权重，受交易所 IP 限制，应按实际用量调整刷新频率或加入共享缓存。
-
-快照按五分钟时间桶 upsert，只有更新的采集时间能覆盖旧值。不同 API Key 不共用历史；轮换密钥要保留历史时需人工迁移 account scope。查询曲线只采每小时末点，最多约 2160 点，不一次加载所有原始快照。
-
-## 有意限定的第一版范围
-
-单账户、共享查看密码、Binance Spot，环境变量管理凭证。没有多租户账户管理、在线密钥编辑、自动资金流水对账或全历史交易数据库。累计/浮动盈亏依赖人工输入，本版不承诺自动投资业绩核算。
-
-增加 OKX/Bybit 时，新建 provider 返回 `ProviderData`，扩展 config 中数据源选项；不要让前端直接访问交易所。增加自动盈亏前应先落地交易和资金流账本，支持转账去重、手续费币种及历史汇率、期初库存对账，然后决定 FIFO/加权成本算法。
+Cron 只采余额和行情，使用共享查询截止时间，单账户失败会明确报告。默认免费每日采集与页面 60 秒刷新独立。盈亏仍依赖管理员维护的成本、本金及净入金，不推断全历史交易成本。

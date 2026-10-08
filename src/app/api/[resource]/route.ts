@@ -1,6 +1,6 @@
-import { authorize } from "@/lib/auth";
+import { authorize, authenticatedJson } from "@/lib/auth";
 import { dashboard } from "@/lib/service";
-import { json, failure } from "@/lib/http";
+import { failure } from "@/lib/http";
 import { AppError } from "@/lib/errors";
 import { BinanceClient } from "@/lib/binance";
 export const runtime = "nodejs";
@@ -8,7 +8,9 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 export async function GET(request: Request, context: { params: Promise<{ resource: string }> }) {
   try {
-    const c = authorize(request);
+    const auth = authorize(request);
+    const c = auth.config;
+    const respond = (data: unknown) => authenticatedJson(data, auth);
     const { resource } = await context.params;
     if (
       !["dashboard", "holdings", "pnl", "trades", "orders", "history", "connection"].includes(
@@ -43,30 +45,34 @@ export async function GET(request: Request, context: { params: Promise<{ resourc
         const client = new BinanceClient(c);
         await client.syncTime();
         const trades = await client.trades(symbol, fromId, limit);
-        return json({
+        return respond({
           data: trades,
           nextFromId:
             trades.length === limit ? (BigInt(trades[trades.length - 1].id) + 1n).toString() : null,
           coverage: "未传 fromId 时返回最近成交；fromId=0 可从最早可用成交向后分页。",
         });
       }
-      const trades = (await dashboard()).trades
+      const trades = (await dashboard(c)).trades
         .filter((t) => t.symbol === symbol && (!fromId || BigInt(t.id) >= BigInt(fromId)))
         .sort((a, b) => a.time - b.time)
         .slice(0, limit);
-      return json({ data: trades, nextFromId: null, coverage: "模拟成交" });
+      return respond({ data: trades, nextFromId: null, coverage: "模拟成交" });
     }
-    const result = await dashboard();
-    if (resource === "dashboard") return json(result);
+    const result = await dashboard(c);
+    if (resource === "dashboard") return respond(result);
     if (resource === "pnl")
-      return json({ data: result.summary, warnings: result.warnings, updatedAt: result.updatedAt });
+      return respond({
+        data: result.summary,
+        warnings: result.warnings,
+        updatedAt: result.updatedAt,
+      });
     if (resource === "connection")
-      return json({
+      return respond({
         data: { source: result.source, environment: result.environment, ...result.connection },
         warnings: result.warnings,
         updatedAt: result.updatedAt,
       });
-    return json({
+    return respond({
       data: result[resource as "holdings" | "trades" | "orders" | "history"],
       updatedAt: result.updatedAt,
       warnings: result.warnings,

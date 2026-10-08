@@ -1,13 +1,13 @@
-import { authorize, checkOrigin } from "@/lib/auth";
+import { authorize, authenticatedJson, checkOrigin } from "@/lib/auth";
 import { dashboard } from "@/lib/service";
-import { json, failure } from "@/lib/http";
+import { failure } from "@/lib/http";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 export async function POST(request: Request) {
   try {
-    authorize(request);
+    const auth = authorize(request);
     checkOrigin(request);
-    return json(await dashboard(true));
+    return authenticatedJson(await dashboard(auth.config, true), auth);
   } catch (e) {
     return failure(e);
   }

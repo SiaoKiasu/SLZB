@@ -1,40 +1,47 @@
 import "server-only";
 import Decimal from "decimal.js";
 import { createHash } from "node:crypto";
-import { getConfig } from "./config";
+import type { Config } from "./config";
 import { BinanceClient } from "./binance";
 import { demoCosts, demoData, demoHistory } from "./demo";
 import { STABLECOINS, totalPnl, valueHoldings } from "./portfolio";
 import { readHistory, saveSnapshot } from "./storage";
 import type { Dashboard, ProviderData } from "./types";
-let cache: { key: string; at: number; data: ProviderData } | undefined;
-let pending: { key: string; promise: Promise<ProviderData> } | undefined;
-async function provider() {
-  const c = getConfig();
+type Cached = { data: ProviderData; time: number };
+const cache = new Map<string, Cached>();
+const pending = new Map<string, Promise<Cached>>();
+async function provider(c: Config): Promise<Cached> {
   if (c.DATA_SOURCE === "demo") return { data: demoData(), time: Date.now() };
   const key = createHash("sha256")
-    .update(JSON.stringify([c.BINANCE_API_KEY, c.BINANCE_API_SECRET, c.BINANCE_ENV, c.symbols]))
+    .update(
+      JSON.stringify([
+        c.ACCOUNT_ID,
+        c.BINANCE_API_KEY,
+        c.BINANCE_API_SECRET,
+        c.BINANCE_ENV,
+        c.symbols,
+      ]),
+    )
     .digest("hex");
-  if (cache?.key === key && Date.now() - cache.at < 30000)
-    return { data: cache.data, time: cache.at };
-  if (!pending || pending.key !== key) {
-    const promise = new BinanceClient(c)
+  for (const [k, value] of cache) if (Date.now() - value.time >= 30000) cache.delete(k);
+  const current = cache.get(key);
+  if (current) return current;
+  let request = pending.get(key);
+  if (!request) {
+    request = new BinanceClient(c)
       .load(c.symbols)
       .then((data) => {
-        cache = { key, at: Date.now(), data };
-        return data;
+        const result = { data, time: Date.now() };
+        cache.set(key, result);
+        return result;
       })
-      .finally(() => {
-        if (pending?.key === key) pending = undefined;
-      });
-    pending = { key, promise };
+      .finally(() => pending.delete(key));
+    pending.set(key, request);
   }
-  const data = await pending.promise;
-  return { data, time: cache?.at ?? Date.now() };
+  return request;
 }
-export async function dashboard(persist = false): Promise<Dashboard> {
-  const c = getConfig();
-  const { data, time } = await provider();
+export async function dashboard(c: Config, persist = false): Promise<Dashboard> {
+  const { data, time } = await provider(c);
   const demo = c.DATA_SOURCE === "demo";
   const holdings = valueHoldings(data.balances, data.tickers, demo ? demoCosts : c.costs);
   const sum = (values: (string | null)[]) =>
@@ -56,17 +63,14 @@ export async function dashboard(persist = false): Promise<Dashboard> {
       }
       history = await readHistory(c);
     } catch {
-      warnings.push("数据库连接失败，本次净值历史不可用；实时账户数据仍可查看。");
+      warnings.push("历史净值暂时不可用；实时账户数据仍可查看，请联系管理员。");
     }
   }
-  if (!demo && !c.DATABASE_URL)
-    warnings.push("尚未连接数据库：实时数据可用，历史净值不会持久保存。");
+  if (!demo && !c.DATABASE_URL) warnings.push("历史净值尚未启用，实时账户数据可正常查看。");
   if (unpriced)
     warnings.push(`${unpriced} 种资产缺少可用行情，当前总额仅为已估值资产小计，累计盈亏暂停计算。`);
-  if (!demo && baseline === undefined)
-    warnings.push("累计盈亏待配置：请设置起始净值、起始时间和期间净入金。");
-  if (!demo && costed.length)
-    warnings.push("持仓浮盈亏使用手工维护的成本；交易或转账后请同步更新成本配置。");
+  if (!demo && baseline === undefined) warnings.push("累计盈亏口径尚未设定，请联系管理员。");
+  if (!demo && costed.length) warnings.push("持仓浮盈亏采用管理员维护的成本口径。");
   return {
     source: c.DATA_SOURCE,
     accountLabel: c.ACCOUNT_LABEL,

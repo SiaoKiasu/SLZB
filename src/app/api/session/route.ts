@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import {
   authorize,
+  authenticatedJson,
   checkOrigin,
-  constantEqual,
   COOKIE_NAME,
-  createSession,
-  SESSION_TTL,
+  setSessionCookie,
 } from "@/lib/auth";
-import { getConfig } from "@/lib/config";
+import { getAppConfig, DEMO_CONFIG } from "@/lib/config";
+import { verifyPassword } from "../../../../scripts/password.mjs";
 import { json, failure } from "@/lib/http";
 import { AppError } from "@/lib/errors";
 import { createHash } from "node:crypto";
@@ -15,20 +15,33 @@ export const runtime = "nodejs";
 const attempts = new Map<string, { count: number; until: number }>();
 export async function GET(request: Request) {
   try {
-    const c = authorize(request);
-    return json({
-      authenticated: true,
-      demo: c.DATA_SOURCE === "demo",
-      passwordProtected: Boolean(c.PORTAL_PASSWORD),
-    });
+    const auth = authorize(request);
+    return authenticatedJson(
+      {
+        authenticated: true,
+        demo: auth.app.builtInDemo,
+        user: { username: auth.user.username, displayName: auth.user.displayName },
+        accountLabel: auth.config.ACCOUNT_LABEL,
+      },
+      auth,
+    );
   } catch (e) {
+    if (e instanceof AppError && e.status === 401)
+      return json(
+        {
+          authenticated: false,
+          demo: getAppConfig().builtInDemo,
+          error: { code: e.code, message: e.message },
+        },
+        401,
+      );
     return failure(e);
   }
 }
 export async function POST(request: Request) {
   try {
     checkOrigin(request);
-    const c = getConfig();
+    const app = getAppConfig();
     const key = createHash("sha256")
       .update(request.headers.get("x-forwarded-for")?.split(",")[0] ?? "local")
       .digest("hex");
@@ -45,27 +58,32 @@ export async function POST(request: Request) {
       throw new AppError("INVALID_BODY", "请求过大。", 400);
     const body = await request.text();
     if (body.length > 2048) throw new AppError("INVALID_BODY", "请求过大。", 400);
+    let username: unknown;
     let password: unknown;
     try {
-      password = JSON.parse(body).password;
+      ({ username, password } = JSON.parse(body));
     } catch {
       throw new AppError("INVALID_BODY", "请求格式无效。", 400);
     }
+    if (typeof username !== "string" || typeof password !== "string" || password.length > 256)
+      throw new AppError("INVALID_CREDENTIALS", "用户名或密码不正确。", 401);
+    const user = app.users.find((u) => u.username === username.trim().toLowerCase());
+    const verified = await verifyPassword(
+      password,
+      user?.passwordHash ?? DEMO_CONFIG.users[0].passwordHash,
+    );
     if (
-      typeof password !== "string" ||
-      !c.PORTAL_PASSWORD ||
-      !constantEqual(password, c.PORTAL_PASSWORD)
+      !user?.enabled ||
+      !verified ||
+      !app.accounts.some((a) => a.id === user.accountId && a.enabled)
     )
-      throw new AppError("INVALID_PASSWORD", "访问密码不正确。", 401);
+      throw new AppError("INVALID_CREDENTIALS", "用户名或密码不正确。", 401);
     attempts.delete(key);
-    const response = NextResponse.json({ ok: true }, { headers: { "Cache-Control": "no-store" } });
-    response.cookies.set(COOKIE_NAME, createSession(c.SESSION_SECRET, c.PORTAL_PASSWORD), {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-      path: "/",
-      maxAge: SESSION_TTL,
-    });
+    const response = NextResponse.json(
+      { ok: true, user: { username: user.username, displayName: user.displayName } },
+      { headers: { "Cache-Control": "no-store" } },
+    );
+    setSessionCookie(response, app, user);
     return response;
   } catch (e) {
     return failure(e);

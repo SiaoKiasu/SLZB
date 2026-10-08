@@ -6,4 +6,5 @@ node_modules/
 *.tsbuildinfo
 coverage/
 next-env.d.ts
+.slzb/
 .DS_Store

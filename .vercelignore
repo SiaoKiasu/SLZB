@@ -1,0 +1,3 @@
+.slzb/
+.env*
+!.env.example

@@ -26,10 +26,10 @@ export function signQuery(query: string, secret: string) {
 export class BinanceClient {
   private offset = 0;
   private base: string;
-  private deadline = Date.now() + 40000;
   constructor(
     private config: Pick<Config, "BINANCE_ENV" | "BINANCE_API_KEY" | "BINANCE_API_SECRET">,
     private transport: typeof fetch = fetch,
+    private deadline = Date.now() + 40000,
   ) {
     this.base =
       config.BINANCE_ENV === "testnet"
@@ -84,7 +84,7 @@ export class BinanceClient {
         [-2014]: "API Key 格式不正确。",
         [-1022]: "API 签名无效，请检查 Secret 与 API Key 是否配对。",
         [-1021]: "交易所时间校验失败，请重试。",
-        [-1121]: "交易对无效，请检查 TRACKED_SYMBOLS。",
+        [-1121]: "监控交易对不可用，请联系管理员。",
       };
       throw new AppError(
         "EXCHANGE_ERROR",
@@ -120,7 +120,7 @@ export class BinanceClient {
       isMaker: t.isMaker,
     }));
   }
-  async load(symbols: string[]): Promise<ProviderData> {
+  async loadBalances() {
     await this.syncTime();
     const account = z
       .object({
@@ -136,6 +136,10 @@ export class BinanceClient {
         }),
       )
       .parse(await this.request("/api/v3/ticker/24hr"));
+    return { balances: account.balances, tickers };
+  }
+  async load(symbols: string[]): Promise<ProviderData> {
+    const { balances, tickers } = await this.loadBalances();
     const warnings: string[] = [];
     let orders: ProviderData["orders"] = [];
     let ordersComplete = true;
@@ -194,7 +198,7 @@ export class BinanceClient {
       `成交列表仅包含所配置 ${symbols.length} 个交易对各自最近 100 笔；不代表全账户历史。`,
     );
     return {
-      balances: account.balances,
+      balances,
       tickers,
       trades: trades.sort((a, b) => b.time - a.time),
       orders,

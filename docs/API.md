@@ -1,49 +1,43 @@
-# SLZB JSON API
+# SLZB 多用户只读 API
 
-Base URL：部署域名或 `http://localhost:3000`。响应设置 `Cache-Control: private, no-store`，不允许跨域浏览器读写。所有金额使用十进制字符串，时间戳单位为毫秒。
+Base URL 为本地 `http://localhost:3000` 或部署域名。所有账户接口必须使用用户会话 Cookie，金额为十进制字符串，时间戳为毫秒，响应 `Cache-Control: private, no-store`。
 
-## 认证
+## 登录与持久会话
 
-Portal 通过 `POST /api/session` 登录，服务端设置 `slzb_session` HttpOnly、SameSite=Strict Cookie；生产模式 Secure，12 小时过期。Session Secret 或访问密码轮换会使旧 Cookie 失效。
+`POST /api/session` 接收 `{ "username": "xiaowang", "password": "..." }`，必须携带与服务地址相同的 `Origin`。响应设置一年有效期的 `slzb_session` HttpOnly / SameSite=Strict Cookie，生产环境带 Secure。
 
-外部脚本推荐设置至少 32 位 `MONITOR_API_TOKEN`，通过 `Authorization: Bearer <token>` 访问。不要把该 Token 填入前端或浏览器持久存储。未设置密码的演示模式公开读取。
+所有成功认证的账户请求在 Cookie 已使用一天后自动续期。会话绑定用户名、密码哈希、分配的账户 ID 和 sessionVersion；用户被移除、停用，账户被停用，密码、绑定、版本或签名密钥改变后，旧 Cookie 失效。退出接口清除当前浏览器 Cookie；管理员撤销登录可以使此前签发的 Cookie 在所有设备失效。
 
-```bash
-curl "$SLZB_URL/api/holdings" \
-  -H "Authorization: Bearer $SLZB_API_TOKEN"
+**每次请求只访问服务端绑定的账户。没有客户端 accountId 切换功能，也没有全局 MONITOR_API_TOKEN。** 添加 `accountId`、自定义 Header 或别人的交易对不能扩大访问权限。默认 Demo 也需要用户名及密码登录。
 
-curl -X POST "$SLZB_URL/api/sync" \
-  -H "Authorization: Bearer $SLZB_API_TOKEN"
-```
+## 接口
 
-`SLZB_URL` 和 `SLZB_API_TOKEN` 是调用方自行设置的 shell 变量。浏览器 Cookie 请求的 POST/DELETE 必须带相同 origin；已验证的 API Bearer 请求豁免 Origin 检查。
+| 方法   | 路径                                             | 作用                                           |
+| ------ | ------------------------------------------------ | ---------------------------------------------- |
+| GET    | `/api/health`                                    | 公共存活探针，不检查交易所                     |
+| GET    | `/api/session`                                   | 当前用户名、显示名称、账户名称；未登录返回 401 |
+| POST   | `/api/session`                                   | 用户名 + 密码登录                              |
+| DELETE | `/api/session`                                   | 退出当前浏览器                                 |
+| GET    | `/api/dashboard`                                 | 当前用户绑定账户的聚合视图                     |
+| GET    | `/api/holdings`                                  | 当前账户持仓                                   |
+| GET    | `/api/pnl`                                       | 当前账户估值及配置口径盈亏                     |
+| GET    | `/api/trades`                                    | 监控交易对各最近 100 笔成交                    |
+| GET    | `/api/trades?symbol=BTCUSDT&fromId=0&limit=1000` | 当前账户单交易对向后分页                       |
+| GET    | `/api/orders`                                    | 当前账户全 Spot 钱包当前挂单                   |
+| GET    | `/api/history`                                   | 当前账户近 90 天每小时末净值点                 |
+| GET    | `/api/connection`                                | 当前账户来源及覆盖状态，不含密钥或其他用户     |
+| POST   | `/api/sync`                                      | 当前账户同步并尝试保存快照                     |
+| GET    | `/api/cron`                                      | 管理员 Cron Bearer 鉴权，采集所有启用真实账户  |
 
-## 接口清单
+除健康检查、登录和独立 Cron 外，全部接口都验证用户 Cookie。POST/DELETE 必须携带同源 Origin；没有可通过网页更改用户、密码、绑定或 API 密钥的接口。
 
-| 方法   | 路径                                             | 说明                                          |
-| ------ | ------------------------------------------------ | --------------------------------------------- |
-| GET    | `/api/health`                                    | 公共服务存活检查，不探测交易所及数据库        |
-| GET    | `/api/session`                                   | 验证当前登录状态                              |
-| POST   | `/api/session`                                   | `{ "password": "..." }` 登录，同源请求        |
-| DELETE | `/api/session`                                   | 退出登录，同源请求                            |
-| GET    | `/api/dashboard`                                 | 聚合资产、摘要、成交、挂单、历史、连接状态    |
-| GET    | `/api/holdings`                                  | 持仓列表：可用/冻结、估值、成本、浮盈亏、权重 |
-| GET    | `/api/pnl`                                       | 资产与盈亏摘要、数据口径提示                  |
-| GET    | `/api/trades`                                    | 配置交易对各最近 100 笔成交，按时间倒序       |
-| GET    | `/api/trades?symbol=BTCUSDT&fromId=0&limit=1000` | 单交易对按交易 ID 向后分页                    |
-| GET    | `/api/orders`                                    | 全现货账户当前挂单                            |
-| GET    | `/api/history`                                   | 近 90 天每小时最后一个已保存净值点            |
-| GET    | `/api/connection`                                | 数据源、环境、交易对和同步状态，不返回密钥    |
-| POST   | `/api/sync`                                      | 同步并尝试保存净值快照；返回完整 Dashboard    |
-| GET    | `/api/cron`                                      | 仅接受 `CRON_SECRET` Bearer，写后台快照       |
+聚合 `/api/dashboard` 和 `/api/sync` 直接返回 Dashboard。其他账户数据端点通常返回 `{ data, updatedAt, warnings }`。会话成功返回 `{ authenticated: true, demo, user: { username, displayName }, accountLabel }`。只有未配置自建用户的内置 Demo 才返回 `demo: true` 以显示演示登录提示。
 
-`/api/health` 为存活探针，`/api/connection` 才会访问真实账户。聚合类 GET 不保存净值；`/api/sync` 才保存。交易所查询在同一服务实例内合并并缓存 30 秒，手动刷新也遵守缓存，响应的 `updatedAt` 为真实数据获取时间。多实例之间没有共享缓存。分页成交请求不使用聚合缓存。
+## 成交分页与完整性
 
-## 成交分页
+`symbol` 必须在该用户所属账户的监控列表。`limit` 为 1–1000，`fromId` 为非负整数 ID；传 limit/fromId 时必须同时传 symbol。
 
-`symbol` 必须存在于 `TRACKED_SYMBOLS`，`limit` 为 1–1000 的整数（默认 100），`fromId` 为非负整数 ID。
-
-从 `fromId=0` 开始；收到 `nextFromId` 后把它传入下一次请求，直到返回 `null`。如果不传 `fromId`，Binance 默认返回最近成交，此时 nextFromId 仅能用于读取之后的新成交，不是向更早历史翻页。仅传 fromId 或 limit 而不传 symbol 返回 400。
+从 `fromId=0` 开始；收到 `nextFromId` 后传入下一次请求，直到 null。不传 fromId 时是交易所最近成交；之后的 nextFromId 只能读取更新的成交，不能用于倒序翻旧记录。
 
 ```json
 {
@@ -66,29 +60,18 @@ curl -X POST "$SLZB_URL/api/sync" \
 }
 ```
 
-接口保留手续费原币种，成交额使用交易对的报价币（例如 ETHBTC 的成交额是 BTC）。不跨币种直接求和。单交易对分页接口不自动将成交写入数据库。
+`connection.tradesComplete` 只表示本轮配置交易对查询都成功，不代表全历史完整。`ordersComplete=false` 时空列表不是“没有挂单”。历史接口不返回其他账户历史；存储 scope 不接受来自浏览器的参数。
 
-## 返回结构与空值
+金额 null 表示未知。未知行情资产不计入小计，暂停累计盈亏及净值快照。浮盈亏仅汇总有成本的资产；累计盈亏需要管理员维护起始净值、时间及期间净入金。
 
-聚合 `/api/dashboard`、`/api/sync` 直接返回 Dashboard。其他数据端点返回 `{ data, updatedAt, warnings }`；单交易对成交使用上面的分页结构。
+## Cron
 
-`holdings[].price/value/averageCost/unrealizedPnl` 和 `summary.totalPnl` 可能为 `null`，表示缺数据，**不是零**。`summary.unrealizedPnl` 只汇总已配置成本的持仓，`costCoverage` 为覆盖币种数量。`summary.tradeCount` 是本次返回的成交数，并非日交易数或全历史成交数。
+需 `Authorization: Bearer <CRON_SECRET>`；用户 Cookie 无法调用。可用 `?accountId=friend-a` 单独采集一个账户（仅限管理员密钥）。余额/行情读取两路并发，使用共同 45 秒预算，不下载成交。响应包含 `{ ok, results: [{ accountId, saved }] }`；任一账户失败返回 503。无可采集账户返回 404。
 
-`connection.tradesComplete` 表示本次所有配置交易对查询是否成功，**不代表历史数据完整**。`connection.ordersComplete=false` 时，空挂单数组不代表账户没有挂单。`connection.database` 仅表示已配置连接串；`snapshotsSaved` 只表示本次 sync 是否实际写入成功，GET 查询通常为 false。
+## 错误与缓存
 
-## 错误
+格式为 `{ "error": { "code": "UNAUTHORIZED", "message": "请登录你的查看账号。" } }`。
 
-```json
-{ "error": { "code": "UNAUTHORIZED", "message": "请先登录账户监控。" } }
-```
+400 参数无效，401 未登录或账号密码错误，403 来源校验失败，404 资源不存在，429 请求限流，502 交易所异常，503 服务配置或采集失败。密码错误、用户不存在、停用时都返回相同登录错误，避免泄露用户存在性。
 
-- `400`：输入/分页参数无效。
-- `401`：未登录、密码错误或 Cron 未授权。
-- `403`：请求来源不合法。
-- `404`：数据资源不存在。
-- `429`：登录限流或交易所限流。
-- `502`：交易所请求失败、网络错误或区域拒绝。
-- `503`：必需配置缺失、Cron 无数据库或快照写入失败。
-- `500`：服务内部异常（不透出原始异常/密钥/连接串）。
-
-部分交易对或挂单读取失败时，资产仍可显示，HTTP 200 加 `warnings` 和完整性标记。账户余额或市场报价请求失败时返回错误，不会悄悄替换为演示数据。
+同一账户的聚合查询在同一实例合并并缓存 30 秒，不同账户独立。服务器每次都先验证会话及最新账户绑定，再访问缓存。实例间没有共享缓存，账户之间绝不共享客户端数据。单交易对分页不缓存。没有认证信息、配置文件内容、密码哈希或交易所密钥的读写接口。

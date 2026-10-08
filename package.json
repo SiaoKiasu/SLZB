@@ -1,6 +1,6 @@
 {
   "name": "slzb-portfolio",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -10,7 +10,10 @@
     "test": "vitest run",
     "check": "npm run test && npm run typecheck && npm run build",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "setup": "node scripts/manage.mjs",
+    "config:check": "node scripts/manage.mjs --check",
+    "config:export": "node scripts/manage.mjs --export"
   },
   "engines": {
     "node": "24.x"
@@ -27,11 +30,13 @@
     "zod": "4.6.5"
   },
   "devDependencies": {
+    "@inquirer/prompts": "8.7.3",
     "@types/node": "26.6.4",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "prettier": "3.9.9",
     "typescript": "7.0.2",
     "vitest": "5.0.3"
-  }
+  },
+  "type": "module"
 }

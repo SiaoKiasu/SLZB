@@ -10,7 +10,7 @@ export function failure(error: unknown) {
     return json({ error: { code: error.code, message: error.message } }, error.status);
   // Never serialize upstream errors: fetch/Postgres errors may contain URLs or credentials.
   return json(
-    { error: { code: "INTERNAL_ERROR", message: "服务暂时不可用，请稍后重试并检查服务端配置。" } },
+    { error: { code: "INTERNAL_ERROR", message: "服务暂时不可用，请稍后重试或联系管理员。" } },
     500,
   );
 }

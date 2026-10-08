@@ -176,7 +176,7 @@ async function main() {
     await exportConfig(config);
     return;
   }
-  console.log("Holdview 管理员配置 · 朋友无需操作本工具\n");
+  console.log("Auren 管理员配置 · 朋友无需操作本工具\n");
   if (process.env.PORTAL_CONFIG_JSON)
     console.log(
       "当前已读取 PORTAL_CONFIG_JSON；修改将保存到本地配置文件。若从 shell 设置该变量，请在启动本地服务前取消它。",

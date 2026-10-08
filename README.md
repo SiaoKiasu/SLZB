@@ -1,4 +1,4 @@
-# SLZB · 私人账户观察室
+# Holdview · 私人账户观察室
 
 **管理员配置账户，朋友用自己的用户名和密码登录，只读查看被分配给他的资产。**
 
@@ -38,7 +38,7 @@ npm run setup
 
 ## 部署到 Vercel
 
-1. Vercel 导入 `SiaoKiasu/SLZB`，选择 Next.js 和 Node.js 24.x。
+1. Vercel 导入 `SiaoKiasu/holdview`，选择 Next.js 和 Node.js 24.x。
 2. 在本地管理好账户与用户后执行 `npm run config:export`。
 3. 在 Vercel Environment Variables 设置：
 

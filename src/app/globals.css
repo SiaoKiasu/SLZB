@@ -116,6 +116,10 @@ strong {
   background: #355b49;
   color: #e0edc8;
   border-radius: 10px;
+  flex-shrink: 0;
+}
+.sidebar .brand {
+  font-size: 22px;
 }
 .workspace-label {
   font-size: 10px;

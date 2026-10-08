@@ -278,7 +278,7 @@ export function Portal() {
             <span className="brand-mark">
               <BarChart3 size={24} />
             </span>{" "}
-            SLZB <span className="brand-sub">PORTFOLIO</span>
+            HOLDVIEW <span className="brand-sub">PORTFOLIO</span>
           </div>
           <div className="entrance-copy">
             <span className="eyebrow">A CLEARER VIEW OF YOUR CAPITAL</span>
@@ -446,7 +446,7 @@ export function Portal() {
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8;" }));
     const a = document.createElement("a");
     a.href = url;
-    a.download = `SLZB-trades-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `holdview-trades-${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -458,11 +458,11 @@ export function Portal() {
   return (
     <div className="shell">
       <aside className="sidebar">
-        <a className="brand" href="/" aria-label="SLZB 首页">
+        <a className="brand" href="/" aria-label="HOLDVIEW 首页">
           <span className="brand-mark">
             <BarChart3 size={23} />
           </span>
-          SLZB
+          HOLDVIEW
         </a>
         <div className="workspace-label">
           账户观察室 <span>SPOT</span>
@@ -489,7 +489,7 @@ export function Portal() {
         </nav>
         <div className="sidebar-bottom">
           <div className="profile">
-            <span className="avatar">S</span>
+            <span className="avatar">H</span>
             <div>
               <strong>{viewer?.displayName ?? "我的账户"}</strong>
               <small>{viewer?.username}</small>
@@ -513,7 +513,7 @@ export function Portal() {
               <ShieldCheck size={14} />
               {viewer?.role === "admin" ? "管理员" : "只读访问"}
             </span>
-            <span className="avatar small">S</span>
+            <span className="avatar small">H</span>
             {viewer && (
               <button className="icon-button" onClick={logout} aria-label="退出账户">
                 <LogOut size={15} />

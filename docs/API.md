@@ -1,4 +1,4 @@
-# SLZB 多用户只读 API
+# Holdview 多用户只读 API
 
 Base URL 为本地 `http://localhost:3000` 或部署域名。所有账户接口必须使用用户会话 Cookie，金额为十进制字符串，时间戳为毫秒，响应 `Cache-Control: private, no-store`。
 

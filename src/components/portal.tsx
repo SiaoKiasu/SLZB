@@ -35,6 +35,7 @@ import {
 } from "recharts";
 import { STABLECOINS } from "@/lib/assets";
 import { CostEditor } from "./cost-editor";
+import { LindenBrand, LindenMark } from "./brand";
 import type { Dashboard, Holding, Trade } from "@/lib/types";
 type Tab = "overview" | "holdings" | "activity";
 const colors = ["#355b49", "#8da184", "#c5bc92", "#b0c6a8", "#dfdfc6", "#8eaba8"];
@@ -274,41 +275,29 @@ export function Portal() {
     return (
       <main className="entrance">
         <div className="entrance-art">
-          <div className="brand">
-            <span className="brand-mark">
-              <BarChart3 size={24} />
-            </span>{" "}
-            Auren <span className="brand-sub">PORTFOLIO</span>
-          </div>
+          <LindenBrand />
           <div className="entrance-copy">
-            <span className="eyebrow">A CLEARER VIEW OF YOUR CAPITAL</span>
+            <span className="eyebrow">PRIVATE CLIENT PORTAL</span>
             <h1>
-              每一笔资产，
+              清晰于当下。
               <br />
-              心中有数。
+              从容于长远。
             </h1>
-            <p>
-              持仓、盈亏与交易动态。
-              <br />
-              一个安静、清晰的账户观察室。
-            </p>
-            <div className="art-bars">
-              {[32, 45, 38, 60, 54, 74, 69, 88, 81, 100].map((h, i) => (
-                <i key={i} style={{ height: `${h}%` }} />
-              ))}
-            </div>
+            <div className="brand-rule" />
           </div>
+          <LindenMark className="entrance-emblem" />
           <span className="entrance-footer">PRIVATE ACCESS · READ ONLY</span>
         </div>
         <div className="entrance-form">
           <div className="login-card">
+            <LindenBrand className="login-brand" />
             <span className="login-icon">
               <LockKeyhole size={26} />
             </span>
-            <span className="eyebrow">YOUR PRIVATE WORKSPACE</span>
+            <span className="eyebrow">CLIENT ACCESS</span>
             <h2>
               {session === "login"
-                ? "欢迎回到账户观察室"
+                ? "登录账户"
                 : session === "error"
                   ? "账户服务暂不可用"
                   : "正在打开账户观察室"}
@@ -446,7 +435,7 @@ export function Portal() {
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8;" }));
     const a = document.createElement("a");
     a.href = url;
-    a.download = `auren-trades-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `linden-trades-${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -458,15 +447,9 @@ export function Portal() {
   return (
     <div className="shell">
       <aside className="sidebar">
-        <a className="brand" href="/" aria-label="Auren 首页">
-          <span className="brand-mark">
-            <BarChart3 size={23} />
-          </span>
-          Auren
+        <a className="brand-link" href="/" aria-label="Linden Asset Management 首页">
+          <LindenBrand />
         </a>
-        <div className="workspace-label">
-          账户观察室 <span>SPOT</span>
-        </div>
         <div className="nav-label">工作空间</div>
         <nav>
           {(
@@ -489,7 +472,7 @@ export function Portal() {
         </nav>
         <div className="sidebar-bottom">
           <div className="profile">
-            <span className="avatar">A</span>
+            <span className="avatar">L</span>
             <div>
               <strong>{viewer?.displayName ?? "我的账户"}</strong>
               <small>{viewer?.username}</small>
@@ -504,6 +487,9 @@ export function Portal() {
       </aside>
       <div className="main-wrap">
         <header className="topbar">
+          <a href="/" className="mobile-brand" aria-label="Linden Asset Management 首页">
+            <LindenBrand />
+          </a>
           <div className="breadcrumb">
             工作空间 <ChevronRight size={13} />
             <strong>{title}</strong>
@@ -513,7 +499,7 @@ export function Portal() {
               <ShieldCheck size={14} />
               {viewer?.role === "admin" ? "管理员" : "只读访问"}
             </span>
-            <span className="avatar small">A</span>
+            <span className="avatar small">L</span>
             {viewer && (
               <button className="icon-button" onClick={logout} aria-label="退出账户">
                 <LogOut size={15} />

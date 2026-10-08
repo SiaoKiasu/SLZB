@@ -1,10 +1,12 @@
 :root {
-  --bg: #f7f8f3;
+  --bg: #f5f4ef;
   --surface: #fff;
-  --text: #252e29;
-  --muted: #899087;
-  --line: #e9ece3;
-  --green: #355b49;
+  --text: #263b33;
+  --muted: #778278;
+  --line: #e5e5dc;
+  --green: #234d3e;
+  --gold: #c5b184;
+  --serif: "Baskerville", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
   --positive: #467457;
   --negative: #b76c5c;
   --font: "DM Sans", "Noto Sans SC", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -94,32 +96,110 @@ strong {
   position: fixed;
   inset: 0 auto 0 0;
   border-right: 1px solid var(--line);
-  background: #fdfefb;
+  background: #183c32;
+  color: #f3f0e5;
   padding: 32px 22px 0;
   display: flex;
   flex-direction: column;
   z-index: 20;
 }
 .brand {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 11px;
-  font-size: 26px;
-  font-weight: 700;
-  letter-spacing: -1px;
+  color: var(--green);
+  white-space: nowrap;
 }
 .brand-mark {
   display: grid;
   place-items: center;
-  width: 37px;
-  height: 37px;
-  background: #355b49;
-  color: #e0edc8;
-  border-radius: 10px;
+  width: 44px;
+  height: 48px;
   flex-shrink: 0;
 }
+.brand-mark svg {
+  width: 100%;
+  height: 100%;
+}
+.brand-type {
+  display: flex;
+  flex-direction: column;
+}
+.brand-name {
+  font-family: var(--serif);
+  font-size: 38px;
+  font-weight: 400;
+  line-height: 1.05;
+  letter-spacing: -1.3px;
+}
+.brand-sub {
+  margin-top: 7px;
+  font-size: 7px;
+  letter-spacing: 1.8px;
+  text-transform: uppercase;
+  font-weight: 500;
+}
 .sidebar .brand {
-  font-size: 22px;
+  color: #f3efe3;
+  gap: 8px;
+}
+.sidebar .brand-mark {
+  width: 34px;
+  height: 43px;
+  color: var(--gold);
+}
+.sidebar .brand-name {
+  font-size: 31px;
+}
+.sidebar .brand-sub {
+  font-size: 6px;
+  letter-spacing: 1.2px;
+  color: #cfbf9d;
+}
+.brand-link {
+  display: block;
+  padding-bottom: 32px;
+  margin-bottom: 30px;
+  border-bottom: 1px solid #ffffff20;
+}
+.mobile-brand {
+  display: none;
+}
+.sidebar .nav-label {
+  color: #a0b4a8;
+}
+.sidebar .nav-item {
+  color: #b9c9bf;
+  border-radius: 3px;
+}
+.sidebar .nav-item:hover {
+  background: #ffffff0a;
+  color: #fff;
+}
+.sidebar .nav-item.active {
+  background: #ffffff0d;
+  color: #f3ecda;
+  box-shadow: inset 2px 0 var(--gold);
+}
+.sidebar .nav-dot {
+  background: var(--gold);
+}
+.sidebar .profile {
+  border-color: #ffffff20;
+}
+.sidebar .profile small {
+  color: #b2c2b7;
+}
+.sidebar .profile .icon-button {
+  color: #b9c9bf;
+}
+.sidebar .avatar {
+  background: #2c5143;
+  border-color: #436052;
+  color: #d8c8a3;
+}
+.avatar {
+  font-family: var(--serif);
 }
 .workspace-label {
   font-size: 10px;
@@ -263,7 +343,7 @@ strong {
   justify-content: space-between;
   align-items: center;
   padding: 0 36px;
-  background: #fdfefb;
+  background: #faf9f5;
 }
 .breadcrumb {
   display: flex;
@@ -437,13 +517,14 @@ strong {
 .stat {
   background: #fff;
   border: 1px solid var(--line);
-  border-radius: 9px;
+  border-radius: 5px;
   padding: 20px 19px;
   min-width: 0;
 }
 .stat.featured {
-  background: #eff3e7;
-  border-color: #e0e8d3;
+  background: #e9eee8;
+  border-color: #d8e1d7;
+  border-top: 2px solid #8f9e80;
 }
 .stat-label {
   display: flex;
@@ -458,7 +539,7 @@ strong {
 }
 .stat-value {
   font-size: 25px;
-  font-weight: 550;
+  font-weight: 500;
   letter-spacing: -0.8px;
   font-variant-numeric: tabular-nums;
   margin: 18px 0 14px;
@@ -493,7 +574,7 @@ strong {
 .panel {
   background: #fff;
   border: 1px solid var(--line);
-  border-radius: 9px;
+  border-radius: 5px;
   overflow: hidden;
   margin-bottom: 22px;
   min-width: 0;
@@ -667,7 +748,7 @@ th {
   font-weight: 400;
   font-size: 9px;
   padding: 11px 23px;
-  background: #fbfcf8;
+  background: #faf9f5;
   border-top: 1px solid #f0f2e9;
   border-bottom: 1px solid #f0f2e9;
 }
@@ -998,7 +1079,7 @@ td small.inline {
 .exchange-logo {
   width: 39px;
   height: 39px;
-  border-radius: 9px;
+  border-radius: 5px;
   background: #f5ead1;
   color: #ae923f;
   font-size: 27px;
@@ -1127,7 +1208,8 @@ td small.inline {
   min-height: 100vh;
 }
 .entrance-art {
-  background: #e9efdf;
+  background: #183c32;
+  color: #f3efe3;
   width: 46%;
   min-height: 100vh;
   padding: 43px 50px;
@@ -1136,12 +1218,37 @@ td small.inline {
   position: relative;
   overflow: hidden;
 }
-.brand-sub {
-  font-size: 10px;
-  font-weight: 400;
-  letter-spacing: 2px;
-  margin-left: 6px;
-  color: #8b9b78;
+.entrance-art .brand {
+  color: #f3efe3;
+  position: relative;
+  z-index: 1;
+}
+.entrance-art .brand-mark,
+.entrance-art .brand-sub {
+  color: #c5b184;
+}
+.entrance-art .eyebrow {
+  color: #c5b184;
+  letter-spacing: 3px;
+}
+.entrance-emblem {
+  position: absolute;
+  width: 480px;
+  height: 480px;
+  right: -65px;
+  bottom: 15px;
+  color: #d1c197;
+  opacity: 0.07;
+  pointer-events: none;
+}
+.brand-rule {
+  width: 48px;
+  height: 1px;
+  background: #c5b184;
+  margin-top: 38px;
+}
+.login-brand {
+  display: none;
 }
 .entrance-copy {
   margin: auto 0;
@@ -1150,11 +1257,12 @@ td small.inline {
   padding-top: 50px;
 }
 .entrance-copy h1 {
-  font-size: clamp(36px, 4.2vw, 65px);
+  font-family: "Songti SC", "Noto Serif SC", var(--serif);
+  font-size: clamp(30px, 3.1vw, 50px);
   line-height: 1.5;
   font-weight: 500;
-  letter-spacing: -3px;
-  color: #3e5c3b;
+  letter-spacing: 1px;
+  color: #f3efe3;
   margin: 24px 0;
 }
 .entrance-copy p {
@@ -1179,8 +1287,10 @@ td small.inline {
 .entrance-footer {
   font-size: 8px;
   letter-spacing: 2px;
-  color: #94a380;
+  color: #b3c0b3;
   margin-top: 40px;
+  position: relative;
+  z-index: 1;
 }
 .entrance-form {
   flex: 1;
@@ -1188,7 +1298,7 @@ td small.inline {
   align-items: center;
   justify-content: center;
   padding: 35px;
-  background: #fbfcf8;
+  background: #faf9f5;
 }
 .login-card {
   width: 100%;
@@ -1200,9 +1310,9 @@ td small.inline {
   width: 53px;
   height: 53px;
   border: 1px solid #e0e8d5;
-  border-radius: 14px;
-  color: #6c8554;
-  background: #eff4e6;
+  border-radius: 4px;
+  color: #48664f;
+  background: #eef0e7;
   margin-bottom: 30px;
 }
 .login-card h2 {
@@ -1410,8 +1520,23 @@ td small.inline {
   .entrance-art {
     padding: 35px;
   }
-  .brand-sub {
+  .sidebar .brand-type {
     display: none;
+  }
+  .sidebar .brand-link {
+    padding-bottom: 0;
+    margin-bottom: 0;
+    border: 0;
+  }
+  .entrance-art .brand {
+    gap: 6px;
+  }
+  .entrance-art .brand-name {
+    font-size: 32px;
+  }
+  .entrance-art .brand-sub {
+    font-size: 6px;
+    letter-spacing: 1.2px;
   }
 }
 @media (max-width: 700px) {
@@ -1421,13 +1546,13 @@ td small.inline {
     width: 100%;
     height: 64px;
     padding: 0 8px;
-    background: #fdfefbf5;
+    background: #183c32f5;
     backdrop-filter: blur(12px);
     border-right: 0;
     border-top: 1px solid var(--line);
     display: block;
   }
-  .sidebar .brand,
+  .sidebar .brand-link,
   .sidebar-bottom {
     display: none;
   }
@@ -1886,5 +2011,40 @@ td small.inline {
   .account-switcher select {
     flex: 1;
     min-width: 140px;
+  }
+}
+
+@media (max-width: 700px) {
+  .mobile-brand {
+    display: block;
+  }
+  .mobile-brand .brand {
+    gap: 5px;
+  }
+  .mobile-brand .brand-mark {
+    width: 26px;
+    height: 32px;
+  }
+  .mobile-brand .brand-name {
+    font-size: 25px;
+  }
+  .mobile-brand .brand-sub {
+    font-size: 5px;
+    letter-spacing: 0.8px;
+    margin-top: 4px;
+  }
+  .topbar .breadcrumb {
+    display: none;
+  }
+  .login-brand {
+    display: flex;
+    width: fit-content;
+    margin-bottom: 42px;
+  }
+  .login-icon {
+    display: none;
+  }
+  .sidebar .nav-item.active {
+    box-shadow: inset 0 2px var(--gold);
   }
 }

@@ -330,8 +330,9 @@ strong {
 .heading-actions {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 13px;
-  padding-top: 12px;
 }
 .badge {
   display: inline-flex;

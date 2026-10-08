@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "SLZB Spot Monitor",
-    "version": "0.6.1",
+    "version": "0.6.2",
     "description": "多用户现货监控：普通用户只读绑定账户；管理员可切换启用账户并维护手工成本。持久 Cookie 自动续期。"
   },
   "servers": [

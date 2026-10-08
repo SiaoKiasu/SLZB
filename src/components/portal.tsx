@@ -377,11 +377,19 @@ export function Portal() {
       </main>
     );
   const stale = data && now - data.updatedAt > 120000;
-  const partial =
-    data &&
-    (!data.connection.tradesComplete ||
-      !data.connection.ordersComplete ||
-      data.summary.unpricedAssets > 0);
+  const syncIssues = data
+    ? [
+        ...(!data.connection.ordersComplete ? ["挂单读取失败"] : []),
+        ...(data.summary.unpricedAssets ? [`缺少行情 ${data.summary.unpricedAssets} 项`] : []),
+        ...(!data.connection.tradesComplete
+          ? [
+              data.connection.historySync.total
+                ? `历史同步中 ${data.connection.historySync.scanned}/${data.connection.historySync.total}`
+                : "历史同步待重试",
+            ]
+          : []),
+      ]
+    : [];
   const holdings =
     data?.holdings.filter(
       (h) =>
@@ -480,15 +488,6 @@ export function Portal() {
           ))}
         </nav>
         <div className="sidebar-bottom">
-          <div className="readonly-box">
-            <ShieldCheck size={22} />
-            <strong>安心观察，专注决策</strong>
-            <p>
-              只读账户连接
-              <br />
-              资产始终在你的交易所
-            </p>
-          </div>
           <div className="profile">
             <span className="avatar">S</span>
             <div>
@@ -525,7 +524,6 @@ export function Portal() {
         <main className="main">
           <div className="page-heading">
             <div>
-              <div className="eyebrow">PORTFOLIO / {tab.toUpperCase()}</div>
               <h1>
                 {title}
                 <button
@@ -536,9 +534,6 @@ export function Portal() {
                   {hidden ? <EyeOff size={19} /> : <Eye size={19} />}
                 </button>
               </h1>
-              <p>
-                {data ? `${data.accountLabel} · 专属只读视图` : "掌握资产全貌，跟上每一笔变化。"}
-              </p>
             </div>
             <div className="heading-actions">
               {viewer?.role === "admin" && (
@@ -547,19 +542,23 @@ export function Portal() {
                   {costEditorOpen ? "收起成本管理" : "成本管理"}
                 </button>
               )}
-              <Badge
-                muted={
-                  data?.source === "demo" || Boolean(error) || Boolean(stale) || Boolean(partial)
-                }
-              >
-                {data?.source === "demo"
-                  ? "演示模式"
-                  : error || stale
-                    ? "数据待更新"
-                    : partial
-                      ? "部分数据未同步"
-                      : "Binance 现货"}
-              </Badge>
+              {(data?.source === "demo" || error || stale || !syncIssues.length) && (
+                <Badge muted={data?.source === "demo" || Boolean(error) || Boolean(stale)}>
+                  {data?.source === "demo"
+                    ? "演示模式"
+                    : error || stale
+                      ? "数据待更新"
+                      : data
+                        ? "Binance 现货"
+                        : "连接中"}
+                </Badge>
+              )}
+              {data?.source !== "demo" &&
+                syncIssues.map((issue) => (
+                  <Badge key={issue} muted>
+                    {issue}
+                  </Badge>
+                ))}
               <button className="button" onClick={load} disabled={busy}>
                 <RefreshCw size={15} className={busy ? "spin" : ""} />
                 {busy ? "更新中" : "刷新数据"}
@@ -658,20 +657,14 @@ export function Portal() {
                   <div className="stat featured">
                     <div className="stat-label">
                       {data.summary.equityComplete ? "总资产估值 · Equity" : "已估值资产小计"}
+                      {data.source === "binance" && data.summary.equitySource === "calculated" && (
+                        <span className="subtle-tag">估算</span>
+                      )}
                       <Wallet size={17} />
                     </div>
                     <div className="stat-value">
                       {money(data.summary.equity)}
                       <span>USDT</span>
-                    </div>
-                    <div className="stat-note">
-                      <span className="live-dot" />
-                      {data.source === "demo"
-                        ? "模拟估值"
-                        : data.summary.equitySource === "exchange"
-                          ? "交易所返回"
-                          : "本地估算"}{" "}
-                      · 现货钱包
                     </div>
                   </div>
                   <div className="stat">
@@ -688,7 +681,9 @@ export function Portal() {
                       {profit(data.summary.realizedPnl)}
                       <span>USDT</span>
                     </div>
-                    <div className="stat-note">{data.summary.realizedPnlNote}</div>
+                    {data.summary.realizedPnl === null && (
+                      <div className="stat-note">{data.summary.realizedPnlNote}</div>
+                    )}
                   </div>
                   <div className="stat">
                     <div className="stat-label">
@@ -701,11 +696,9 @@ export function Portal() {
                       {profit(data.summary.unrealizedPnl)}
                       <span>USDT</span>
                     </div>
-                    <div className="stat-note">
-                      {data.summary.unrealizedPnl === null
-                        ? "管理员成本未齐全或行情缺失"
-                        : `管理员成本 · ${data.summary.costCoverage} 种资产 · 不含稳定币`}
-                    </div>
+                    {data.summary.unrealizedPnl === null && (
+                      <div className="stat-note">缺少成本或行情</div>
+                    )}
                   </div>
                   <div className="stat">
                     <div className="stat-label">
@@ -731,17 +724,6 @@ export function Portal() {
                         ? "尚未设置"
                         : `${money(data.summary.principal)} USDT`}
                     </strong>
-                    <small>管理员登记的初始投入</small>
-                  </div>
-                  <div className="sync-note">
-                    {data.source === "demo"
-                      ? "模拟成交账本"
-                      : `历史回溯 ${data.connection.historySync.scanned} / ${data.connection.historySync.total} 个交易对`}
-                    <small>
-                      {data.connection.historySync.oldestCheck
-                        ? `分批查询 · 最早检查 ${new Date(data.connection.historySync.oldestCheck).toLocaleString("zh-CN")}`
-                        : "首次同步需要一些时间"}
-                    </small>
                   </div>
                 </div>
               )}
@@ -754,7 +736,6 @@ export function Portal() {
                           <h2>
                             资产走势 <span className="subtle-tag">USDT</span>
                           </h2>
-                          <p>账户资产估值随时间的变化</p>
                         </div>
                         <div className="segmented">
                           {[
@@ -774,19 +755,11 @@ export function Portal() {
                         </div>
                       </div>
                       <EquityChart data={data} period={period} hidden={hidden} />
-                      <div className="chart-footer">
-                        <span>
-                          <i />
-                          {data.source === "demo" ? "模拟净值" : "已保存账户净值"}
-                        </span>
-                        <span>净值变化包含资金进出，不等同于收益</span>
-                      </div>
                     </section>
                     <section className="panel allocation-panel">
                       <div className="panel-heading">
                         <div>
                           <h2>资产分布</h2>
-                          <p>按当前估值占比</p>
                         </div>
                         <span className="subtle-tag">{data.holdings.length} ASSETS</span>
                       </div>
@@ -846,7 +819,6 @@ export function Portal() {
                       <h2>
                         资产持仓 <span className="count">{data.holdings.length}</span>
                       </h2>
-                      <p>现货余额与当前估值</p>
                     </div>
                     {tab === "overview" ? (
                       <button className="text-button" onClick={() => navigate("holdings")}>
@@ -879,11 +851,6 @@ export function Portal() {
                   <div className="panel-heading">
                     <div>
                       <h2>最近成交</h2>
-                      <p>
-                        {data.connection.tradesComplete
-                          ? "账户的最新交易动态"
-                          : "历史成交正在分批同步"}
-                      </p>
                     </div>
                     <button className="text-button" onClick={() => navigate("activity")}>
                       全部交易 <ArrowUpRight size={15} />
@@ -916,17 +883,11 @@ export function Portal() {
                         <small> 个</small>
                       </strong>
                     </div>
-                    <p>
-                      自动发现交易对，列表展示最近 1,000 笔。
-                      <br />
-                      手续费按原币种展示。
-                    </p>
                   </div>
                   <section className="panel">
                     <div className="panel-heading">
                       <div>
                         <h2>成交明细</h2>
-                        <p>已执行交易 · 不含充值、提现与内部划转</p>
                       </div>
                       <button className="button" onClick={exportTrades}>
                         <Download size={15} />
@@ -992,7 +953,6 @@ export function Portal() {
                     <div className="panel-heading">
                       <div>
                         <h2>当前挂单</h2>
-                        <p>包含部分成交订单 · 只读查看</p>
                       </div>
                       <span className="count">
                         {data.connection.ordersComplete ? data.orders.length : "同步失败"}
@@ -1063,15 +1023,7 @@ export function Portal() {
                 </details>
               )}
               <footer className="page-footer">
-                <span>
-                  <span
-                    className={`status-dot ${error || stale || partial ? "warning-dot" : ""}`}
-                  />
-                  {error || stale ? "数据待更新" : partial ? "部分数据未同步" : "数据已同步"} ·{" "}
-                  {time(data.updatedAt, true)}
-                  {data.source === "demo" ? " · 模拟数据" : ""}
-                </span>
-                <span>每 60 秒刷新 · USDT 计价 · SLZB</span>
+                <span>更新于 {time(data.updatedAt, true)}</span>
               </footer>
             </>
           )}

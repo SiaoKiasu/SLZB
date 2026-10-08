@@ -1,4 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+vi.mock("node:fs", async (original) => ({
+  ...(await original<typeof import("node:fs")>()),
+  existsSync: () => false,
+  readFileSync: () => {
+    throw new Error("Tests must not read private user config");
+  },
+}));
 import {
   authorize,
   checkOrigin,
@@ -113,6 +120,7 @@ describe("administrator configuration", () => {
     vi.stubEnv("PORTAL_CONFIG_JSON", "not-json");
     expect(() => getAppConfig()).toThrow(/配置/);
     vi.stubEnv("PORTAL_CONFIG_JSON", "");
+    vi.stubEnv("PORTAL_CONFIG_FILE", "");
     vi.stubEnv("DATA_SOURCE", "binance");
     expect(() => getAppConfig()).toThrow(/迁移/);
   });

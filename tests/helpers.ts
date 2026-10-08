@@ -47,6 +47,9 @@ export function fixture(source: "demo" | "binance" = "demo") {
 }
 export function configure(raw = fixture()) {
   vi.stubEnv("PORTAL_CONFIG_JSON", JSON.stringify(raw));
+  vi.stubEnv("DATABASE_URL", "");
+  vi.stubEnv("CRON_SECRET", "");
+  vi.stubEnv("PORTAL_CONFIG_FILE", "");
   vi.stubEnv("SESSION_SECRET", "unit-test-secret-more-than-thirty-two-characters");
   return getAppConfig();
 }

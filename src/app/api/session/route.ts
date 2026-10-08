@@ -20,7 +20,11 @@ export async function GET(request: Request) {
       {
         authenticated: true,
         demo: auth.app.builtInDemo,
-        user: { username: auth.user.username, displayName: auth.user.displayName },
+        user: {
+          username: auth.user.username,
+          displayName: auth.user.displayName,
+          role: auth.user.role,
+        },
         accountLabel: auth.config.ACCOUNT_LABEL,
       },
       auth,
@@ -80,7 +84,10 @@ export async function POST(request: Request) {
       throw new AppError("INVALID_CREDENTIALS", "用户名或密码不正确。", 401);
     attempts.delete(key);
     const response = NextResponse.json(
-      { ok: true, user: { username: user.username, displayName: user.displayName } },
+      {
+        ok: true,
+        user: { username: user.username, displayName: user.displayName, role: user.role },
+      },
       { headers: { "Cache-Control": "no-store" } },
     );
     setSessionCookie(response, app, user);

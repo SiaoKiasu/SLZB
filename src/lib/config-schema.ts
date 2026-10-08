@@ -42,6 +42,7 @@ export const userSchema = z.object({
   displayName: z.string().min(1).max(60),
   passwordHash: z.string().regex(passwordHashPattern),
   accountId: identifier,
+  role: z.enum(["viewer", "admin"]).default("viewer"),
   enabled: z.boolean().default(true),
   sessionVersion: z.number().int().min(1).max(Number.MAX_SAFE_INTEGER).default(1),
 });

@@ -25,8 +25,13 @@ export function demoData(): ProviderData {
       });
     };
     for (let i = 0; i < 4; i++) {
-      add("BUY", "1", "100", now - (72 - i * 6) * 3600000);
-      add("SELL", "1", "110", now - (70 - i * 6) * 3600000);
+      add("BUY", "1", demoCosts[asset], now - (72 - i * 6) * 3600000);
+      add(
+        "SELL",
+        "1",
+        new Decimal(demoCosts[asset]).plus(10).toString(),
+        now - (70 - i * 6) * 3600000,
+      );
     }
     add("BUY", quantities[asset], demoCosts[asset], now - 2 * 3600000);
     ledger.markets[symbol] = {

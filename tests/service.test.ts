@@ -1,10 +1,16 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-const mocks = vi.hoisted(() => ({ load: vi.fn(), save: vi.fn(), history: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  load: vi.fn(),
+  save: vi.fn(),
+  history: vi.fn(),
+  costs: vi.fn(),
+}));
 vi.mock("@/lib/binance", () => ({
   BinanceClient: class {
     load = mocks.load;
   },
 }));
+vi.mock("@/lib/cost-store", () => ({ readCosts: mocks.costs }));
 vi.mock("@/lib/ledger-store", () => ({ readLedger: vi.fn(), saveLedger: vi.fn() }));
 vi.mock("@/lib/storage", () => ({ saveSnapshot: mocks.save, readHistory: mocks.history }));
 import { dashboard } from "@/lib/service";
@@ -15,6 +21,7 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 function config(key: string) {
+  mocks.costs.mockResolvedValue({ costs: {} });
   const raw = fixture("binance");
   raw.accounts[0].apiKey = key;
   const app = configure(raw);
@@ -36,6 +43,24 @@ const base = {
   ordersComplete: true,
 };
 describe("snapshot and valuation integrity", () => {
+  it("uses manual costs immediately before history finishes and picks up edits without an upstream refresh", async () => {
+    const c = config("manual-before-history-test");
+    mocks.load.mockResolvedValue({
+      ...base,
+      tradesComplete: false,
+      balances: [{ asset: "BTC", free: "1", locked: "0.5" }],
+      tickers: [{ symbol: "BTCUSDT", lastPrice: "60000", priceChangePercent: "0" }],
+    });
+    mocks.history.mockResolvedValue([]);
+    mocks.costs.mockResolvedValue({ costs: { BTC: "58000" } });
+    const first = await dashboard(c);
+    expect(first.holdings[0].averageCost).toBe("58000");
+    expect(first.summary.unrealizedPnl).toBe("3000");
+    expect(first.summary.realizedPnl).toBeNull();
+    mocks.costs.mockResolvedValue({ costs: { BTC: "59000" } });
+    expect((await dashboard(c)).summary.unrealizedPnl).toBe("1500");
+    expect(mocks.load).toHaveBeenCalledTimes(1);
+  });
   it("separates USDT cash, frozen funds and principal from other stablecoins and missing costs", async () => {
     const c = { ...config("cash-principal-test"), PRINCIPAL_USDT: "75" };
     mocks.load.mockResolvedValue({

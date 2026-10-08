@@ -7,7 +7,8 @@ import { demoData, demoHistory } from "./demo";
 import { STABLECOINS, totalPnl, valueHoldings } from "./portfolio";
 import { readHistory, saveSnapshot } from "./storage";
 import type { Dashboard, ProviderData } from "./types";
-import { reconstructCosts } from "./accounting";
+import { manualRealizedPnl } from "./manual-pnl";
+import { readCosts } from "./cost-store";
 import { readLedger, saveLedger } from "./ledger-store";
 type Cached = { data: ProviderData; time: number };
 const cache = new Map<string, Cached>();
@@ -49,9 +50,7 @@ async function provider(c: Config): Promise<Cached> {
       if (storageFailed)
         data.warnings.push("成交同步进度未能保存，将在下次刷新重试；请联系管理员检查存储。");
       if (process.env.VERCEL && !c.DATABASE_URL)
-        data.warnings.push(
-          "历史同步进度暂未启用持久保存，服务重启后可能重新同步；请联系管理员。",
-        );
+        data.warnings.push("历史同步进度暂未启用持久保存，服务重启后可能重新同步；请联系管理员。");
       return data;
     })()
       .then((data) => {
@@ -67,8 +66,19 @@ async function provider(c: Config): Promise<Cached> {
 export async function dashboard(c: Config, persist = false): Promise<Dashboard> {
   const { data, time } = await provider(c);
   const demo = c.DATA_SOURCE === "demo";
-  const accounting = reconstructCosts(data.balances, data.ledger, data.tradesComplete);
-  const holdings = valueHoldings(data.balances, data.tickers, accounting.costs);
+  let costs: Record<string, string> = {};
+  let costStorageFailed = false;
+  try {
+    costs = (await readCosts(c)).costs;
+  } catch {
+    costStorageFailed = true;
+  }
+  const accounting = manualRealizedPnl(
+    data.ledger,
+    costs,
+    data.tradesComplete && !costStorageFailed,
+  );
+  const holdings = valueHoldings(data.balances, data.tickers, { ...costs, USDT: "1" });
   const sum = (values: (string | null)[]) =>
     values.reduce<Decimal>((a, v) => a.plus(v ?? 0), new Decimal(0)).toString();
   const equity = sum(holdings.map((h) => h.value));
@@ -96,10 +106,22 @@ export async function dashboard(c: Config, persist = false): Promise<Dashboard> 
   if (!demo && !c.DATABASE_URL) warnings.push("历史净值尚未启用，实时账户数据可正常查看。");
   if (unpriced)
     warnings.push(`${unpriced} 种资产缺少可用行情，当前总额仅为已估值资产小计，累计盈亏暂停计算。`);
-  if (accounting.unknown.length)
+  const missingCosts = nonCash.filter((h) => h.averageCost === null).map((h) => h.asset);
+  if (costStorageFailed)
+    warnings.push("管理员成本暂时无法读取，成本相关盈亏暂停计算，请稍后重试。");
+  else if (missingCosts.length)
     warnings.push(
-      `成本待核对：${accounting.unknown.join("、")}。可能涉及未同步历史、转入转出、非 USDT 成交或第三币手续费；缺失成本不按零计算。`,
+      `尚未设置成本：${missingCosts.join("、")}。请管理员在成本管理中填写平均单位成本。`,
     );
+  if (accounting.missing.length)
+    warnings.push(
+      `已实现盈亏还缺少以下币种成本（包括已清仓资产或手续费币）：${accounting.missing.join("、")}。`,
+    );
+  if (accounting.unsupported)
+    warnings.push("已实现盈亏包含非 USDT 计价卖出，尚无法核算完整 USDT 收益，暂不显示总额。");
+  warnings.push(
+    "持仓及卖出盈亏统一采用管理员当前设置的固定单位成本；修改会追溯重算已同步卖出。买入费用应包含在单位成本中，卖出手续费按同一成本折算。后续买入不会自动修改成本，需管理员维护。",
+  );
   return {
     source: c.DATA_SOURCE,
     accountLabel: c.ACCOUNT_LABEL,

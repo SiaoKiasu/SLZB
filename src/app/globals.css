@@ -1759,3 +1759,92 @@ td small.inline {
     gap: 8px;
   }
 }
+
+.cost-editor {
+  margin: 0 0 24px;
+  padding: 22px;
+  border-color: #a8bea4;
+}
+.cost-editor .panel-heading {
+  padding: 0 0 16px;
+}
+.cost-editor fieldset {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.cost-explanation {
+  color: #68735e;
+  font-size: 12px;
+  line-height: 1.8;
+  margin: 0 0 18px;
+}
+.cost-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 14px;
+  margin-bottom: 20px;
+}
+.cost-fields label > span {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.cost-fields small {
+  font-size: 10px;
+  font-weight: 400;
+  color: #76806e;
+}
+.cost-editor input {
+  width: 100%;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid #d8dfd1;
+  border-radius: 8px;
+  background: #fff;
+  color: #263429;
+}
+.cost-add {
+  max-width: 520px;
+  margin-bottom: 18px;
+}
+.cost-add label {
+  display: block;
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+.cost-add > div {
+  display: flex;
+  gap: 10px;
+}
+.cost-add button {
+  white-space: nowrap;
+}
+.cost-footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 18px;
+  font-size: 11px;
+  color: #76806e;
+}
+.cost-notice {
+  color: #355b49;
+  background: #eff4e9;
+  padding: 12px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+@media (max-width: 600px) {
+  .cost-editor {
+    padding: 16px;
+  }
+  .cost-fields {
+    grid-template-columns: 1fr;
+  }
+}

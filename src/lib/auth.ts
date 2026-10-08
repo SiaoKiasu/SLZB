@@ -15,7 +15,7 @@ export function constantEqual(a: string, b: string) {
 }
 function revision(user: PortalUser) {
   return createHash("sha256")
-    .update(JSON.stringify([user.passwordHash, user.accountId, user.sessionVersion]))
+    .update(JSON.stringify([user.passwordHash, user.accountId, user.sessionVersion, user.role]))
     .digest("base64url");
 }
 function sign(payload: string, secret: string) {
@@ -105,4 +105,10 @@ export function checkOrigin(request: Request) {
     /* absent or malformed origin */
   }
   if (!allowed) throw new AppError("ORIGIN_REJECTED", "请求来源无效。", 403);
+}
+
+export function authorizeAdmin(request: Request) {
+  const auth = authorize(request);
+  if (auth.user.role !== "admin") throw new AppError("FORBIDDEN", "仅管理员可以维护成本。", 403);
+  return auth;
 }

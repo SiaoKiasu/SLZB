@@ -33,6 +33,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { CostEditor } from "./cost-editor";
 import type { Dashboard, Holding, Trade } from "@/lib/types";
 type Tab = "overview" | "holdings" | "activity";
 const colors = ["#355b49", "#8da184", "#c5bc92", "#b0c6a8", "#dfdfc6", "#8eaba8"];
@@ -102,7 +103,12 @@ async function api(url: string, init?: RequestInit) {
 export function Portal() {
   const [session, setSession] = useState<"loading" | "login" | "ready" | "error">("loading");
   const [username, setUsername] = useState("");
-  const [viewer, setViewer] = useState<{ username: string; displayName: string } | null>(null);
+  const [viewer, setViewer] = useState<{
+    username: string;
+    displayName: string;
+    role: "admin" | "viewer";
+  } | null>(null);
+  const [costEditorOpen, setCostEditorOpen] = useState(false);
   const [demoLogin, setDemoLogin] = useState(false);
   const [password, setPassword] = useState("");
   const [data, setData] = useState<Dashboard | null>(null);
@@ -124,6 +130,7 @@ export function Portal() {
     loading.current = false;
     setData(null);
     setViewer(null);
+    setCostEditorOpen(false);
     setSession("loading");
     setError("");
     try {
@@ -228,6 +235,7 @@ export function Portal() {
       authChannel.current?.postMessage("changed");
       setData(null);
       setViewer(null);
+      setCostEditorOpen(false);
       setSession("login");
       setError("");
     } catch (e) {
@@ -490,7 +498,7 @@ export function Portal() {
           <div className="topbar-right">
             <span className="read-only">
               <ShieldCheck size={14} />
-              只读访问
+              {viewer?.role === "admin" ? "管理员" : "只读访问"}
             </span>
             <span className="avatar small">S</span>
             {viewer && (
@@ -519,6 +527,12 @@ export function Portal() {
               </p>
             </div>
             <div className="heading-actions">
+              {viewer?.role === "admin" && (
+                <button className="button" onClick={() => setCostEditorOpen((v) => !v)}>
+                  <ShieldCheck size={15} />
+                  {costEditorOpen ? "收起成本管理" : "成本管理"}
+                </button>
+              )}
               <Badge
                 muted={
                   data?.source === "demo" || Boolean(error) || Boolean(stale) || Boolean(partial)
@@ -543,6 +557,27 @@ export function Portal() {
               {error}
               {data && " 当前展示上次成功数据。"}
             </div>
+          )}
+          {viewer?.role === "admin" && costEditorOpen && (
+            <CostEditor
+              holdings={data?.holdings ?? []}
+              trades={data?.trades ?? []}
+              onSaved={async () => {
+                const current = ++generation.current;
+                loading.current = false;
+                try {
+                  const next = await api("/api/dashboard");
+                  if (current === generation.current) {
+                    setData(next);
+                    setError("");
+                  }
+                } catch (e) {
+                  if (current === generation.current) setError((e as Error).message);
+                } finally {
+                  if (current === generation.current) setBusy(false);
+                }
+              }}
+            />
           )}
           {data?.source === "demo" && (
             <div className="demo-banner">
@@ -598,8 +633,8 @@ export function Portal() {
                     </div>
                     <div className="stat-note">
                       {data.summary.realizedPnl === null
-                        ? "历史同步中或成本待核对"
-                        : "已同步成交 · 移动加权成本估算"}
+                        ? "历史同步中或管理员成本未齐全"
+                        : "已同步卖出 · 管理员成本口径"}
                     </div>
                   </div>
                   <div className="stat">
@@ -615,8 +650,8 @@ export function Portal() {
                     </div>
                     <div className="stat-note">
                       {data.summary.unrealizedPnl === null
-                        ? "历史同步中或成本待核对"
-                        : `持仓市值 − 剩余成本 · ${data.summary.costCoverage} 种资产`}
+                        ? "历史同步中或管理员成本未齐全"
+                        : `管理员成本 · ${data.summary.costCoverage} 种资产`}
                     </div>
                   </div>
                   <div className="stat">
@@ -1083,7 +1118,7 @@ function HoldingTable({
                   {profit(h.unrealizedPnl)}
                 </strong>
                 <small>
-                  {h.averageCost === null ? "暂无成本数据" : `成本 ${money(h.averageCost)}`}
+                  {h.averageCost === null ? "管理员尚未设置成本" : `成本 ${money(h.averageCost)}`}
                 </small>
               </td>
               <td>

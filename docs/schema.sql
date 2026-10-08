@@ -12,3 +12,9 @@ CREATE TABLE IF NOT EXISTS slzb_trade_ledgers (
   revision TEXT NOT NULL,
   data JSONB NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS slzb_cost_settings (
+  account_id TEXT PRIMARY KEY,
+  revision TEXT NOT NULL,
+  data JSONB NOT NULL
+);

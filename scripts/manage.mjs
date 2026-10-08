@@ -1,9 +1,11 @@
 import { input, password, select } from "@inquirer/prompts";
 import { existsSync, readFileSync, writeFileSync, mkdirSync, renameSync, chmodSync } from "node:fs";
 import { resolve, dirname } from "node:path";
-import { randomBytes } from "node:crypto";
+import { randomBytes, createHash } from "node:crypto";
 import { portalConfigSchema, accountSchema, userSchema } from "../src/lib/config-schema.ts";
 import { hashPassword } from "./password.mjs";
+import { costValuesSchema } from "../src/lib/cost-schema.ts";
+import { neon } from "@neondatabase/serverless";
 
 if (existsSync(".env.local")) process.loadEnvFile(".env.local");
 const file = resolve(process.env.PORTAL_CONFIG_FILE || ".slzb/accounts.json");
@@ -104,7 +106,7 @@ async function editAccount(old, config) {
     default: old?.principal,
     validate: (v) => !v || /^\d+(\.\d+)?$/.test(v) || "请输入非负金额，或留空",
   });
-  console.log("持仓与交易对将自动发现，成交历史分批同步并用于重建成本，无需填写成本 JSON。");
+  console.log("持仓与交易对将自动发现，成交历史分批同步。币种成本请用管理员账号登录网页维护。");
   return accountSchema.parse({
     id,
     label,
@@ -114,6 +116,7 @@ async function editAccount(old, config) {
     apiSecret,
     principal: principal || undefined,
     symbols: old?.symbols || [],
+    costs: old?.costs || {},
     performance: old?.performance,
     enabled: old?.enabled ?? true,
   });
@@ -124,10 +127,34 @@ function load() {
     process.env.PORTAL_CONFIG_JSON || (existsSync(file) ? readFileSync(file, "utf8") : "");
   return raw ? portalConfigSchema.parse(JSON.parse(raw)) : { accounts: [], users: [] };
 }
-function exportConfig(config) {
+async function exportConfig(config) {
   if (!config.accounts.length || !config.users.length)
     throw new Error("请先创建交易所账户和查看用户。");
-  const data = JSON.stringify(portalConfigSchema.parse(config));
+  const exported = portalConfigSchema.parse(config);
+  for (const account of exported.accounts) {
+    const scope = `${account.id}:${account.environment}:${createHash("sha256").update(account.apiKey).digest("hex").slice(0, 24)}`;
+    let costs;
+    if (process.env.DATABASE_URL) {
+      const sql = neon(process.env.DATABASE_URL, {
+        fetchOptions: { signal: AbortSignal.timeout(5000) },
+      });
+      try {
+        const rows = await sql`SELECT data FROM slzb_cost_settings WHERE account_id = ${scope}`;
+        if (rows.length) costs = rows[0].data.costs;
+      } catch (e) {
+        if (e?.code !== "42P01") throw e;
+      }
+    } else {
+      const costFile = resolve(
+        privateDir,
+        "costs",
+        `${createHash("sha256").update(scope).digest("hex")}.json`,
+      );
+      if (existsSync(costFile)) costs = JSON.parse(readFileSync(costFile, "utf8")).costs;
+    }
+    if (costs) account.costs = costValuesSchema.parse(costs);
+  }
+  const data = JSON.stringify(exported);
   if (Buffer.byteLength(data) > 60000)
     throw new Error("配置体积过大，请缩小配置或改为独立数据库管理。");
   privateWrite(resolve(privateDir, "vercel-config.json"), data);
@@ -146,7 +173,7 @@ async function main() {
     return;
   }
   if (process.argv.includes("--export")) {
-    exportConfig(config);
+    await exportConfig(config);
     return;
   }
   console.log("SLZB 管理员配置 · 朋友无需操作本工具\n");
@@ -166,13 +193,14 @@ async function main() {
         { name: "6. 停用 / 启用查看用户", value: "enabled" },
         { name: "7. 撤销某个用户的全部登录", value: "revoke" },
         { name: "8. 导出 Vercel 配置", value: "export" },
+        { name: "9. 设置用户角色（管理员 / 只读查看）", value: "role" },
         { name: "完成 / 退出", value: "exit" },
       ],
     });
     if (action === "exit") break;
     try {
       if (action === "export") {
-        exportConfig(config);
+        await exportConfig(config);
         continue;
       }
       // Work on a copy so cancelled or invalid input cannot corrupt the next operation.
@@ -212,8 +240,22 @@ async function main() {
             .filter((a) => a.enabled)
             .map((a) => ({ name: `${a.label} (${a.id})`, value: a.id })),
         });
+        const role = await select({
+          message: "用户角色（仅作用于绑定账户）",
+          default: "viewer",
+          choices: [
+            { name: "只读查看（朋友使用）", value: "viewer" },
+            { name: "管理员（可以修改绑定账户成本）", value: "admin" },
+          ],
+        });
         next.users.push(
-          userSchema.parse({ username, displayName, accountId, passwordHash: await newPassword() }),
+          userSchema.parse({
+            username,
+            displayName,
+            accountId,
+            role,
+            passwordHash: await newPassword(),
+          }),
         );
       } else {
         if (!next.users.length) {
@@ -228,6 +270,15 @@ async function main() {
           })),
         });
         const user = next.users.find((u) => u.username === username);
+        if (action === "role")
+          user.role = await select({
+            message: "设置角色（变更后需要重新登录）",
+            default: user.role,
+            choices: [
+              { name: "只读查看", value: "viewer" },
+              { name: "管理员：可修改绑定账户成本", value: "admin" },
+            ],
+          });
         if (action === "password") user.passwordHash = await newPassword();
         if (action === "binding")
           user.accountId = await select({

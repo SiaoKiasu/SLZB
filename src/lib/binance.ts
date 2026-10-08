@@ -204,7 +204,7 @@ export class BinanceClient {
       }
     } catch {
       catalogComplete = false;
-      warnings.push("交易对目录暂未读取成功，历史发现和盈亏计算暂停；余额仍可查看。");
+      warnings.push("交易对目录暂未读取成功，历史发现暂停；余额仍可查看。");
     }
     // Legacy configured pairs are optional discovery hints, never a holdings filter.
     for (const symbol of symbols)
@@ -276,7 +276,7 @@ export class BinanceClient {
         `历史自动同步中：${scanned}/${markets.length} 个交易对已完成首次回溯。保持页面打开会继续同步，包括已清仓交易对。`,
       );
     warnings.push(
-      "成本与盈亏按 API 可获得的现货成交估算；未包含已下架且目录不可发现的交易对、闪兑和转账的外部成本。不同交易对分批更新，非交易所官方盈亏。跨币交易、第三币手续费或余额无法对账时显示待核对。",
+      "成交历史按 API 可获得范围同步，可能缺少已下架交易对、闪兑和转账记录。不同交易对分批更新。",
     );
     const checked = markets.filter((m) => m.complete).map((m) => m.checkedAt);
     return {

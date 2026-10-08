@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "SLZB Spot Monitor",
-    "version": "0.3.0",
+    "version": "0.4.0",
     "description": "多用户只读现货监控：管理员配置绑定，每个登录用户只读取自己的账户。持久 Cookie 自动续期。"
   },
   "servers": [
@@ -157,7 +157,7 @@
     "/api/pnl": {
       "get": {
         "operationId": "pnl",
-        "summary": "现货 Equity、自动估算盈亏、USDT 现金和账户本金",
+        "summary": "现货 Equity、管理员成本口径盈亏、现金与本金",
         "responses": {
           "200": {
             "description": "Summary envelope",
@@ -430,6 +430,66 @@
             "description": "Optional administrator-only account filter; user routes cannot select an account."
           }
         ]
+      }
+    },
+    "/api/costs": {
+      "get": {
+        "summary": "管理员读取绑定账户的手工成本",
+        "responses": {
+          "200": {
+            "description": "costs, revision, updatedAt, updatedBy, writable"
+          },
+          "403": {
+            "description": "需要管理员角色"
+          }
+        }
+      },
+      "put": {
+        "summary": "管理员保存成本并追溯重算盈亏",
+        "description": "仅绑定账户，需要同源 Origin。成本不会自动推算。",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["costs", "revision"],
+                "additionalProperties": false,
+                "properties": {
+                  "revision": {
+                    "type": ["string", "null"],
+                    "format": "uuid"
+                  },
+                  "costs": {
+                    "type": "object",
+                    "maxProperties": 500,
+                    "additionalProperties": {
+                      "type": "string",
+                      "pattern": "^\\d{1,20}(\\.\\d{1,16})?$"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "已保存的成本及修改元数据"
+          },
+          "400": {
+            "description": "无效参数"
+          },
+          "403": {
+            "description": "角色或 Origin 无效"
+          },
+          "409": {
+            "description": "版本冲突，需重新读取"
+          },
+          "503": {
+            "description": "云端缺少持久数据库"
+          }
+        }
       }
     }
   },

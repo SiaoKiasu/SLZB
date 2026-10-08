@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "SLZB Spot Monitor",
-    "version": "0.6.0",
+    "version": "0.6.1",
     "description": "多用户现货监控：普通用户只读绑定账户；管理员可切换启用账户并维护手工成本。持久 Cookie 自动续期。"
   },
   "servers": [
@@ -827,7 +827,7 @@
           },
           "realizedPnl": {
             "$ref": "#/components/schemas/NullableAmount",
-            "description": "成交记录移动加权平均：卖出所得减对应历史买入成本及买入手续费分摊，再扣卖出手续费。手工成本不影响此值。"
+            "description": "按成交记录核算平仓收益，减全部即时发生的买卖手续费；买入费用不再重复计入卖出成本。同步中可返回已读取成交暂计值。"
           },
           "principal": {
             "$ref": "#/components/schemas/NullableAmount"
@@ -853,6 +853,14 @@
           "equityComplete": {
             "type": "boolean",
             "description": "有官方现货估值，或全部持仓本地估值完整时为 true。false 时 equity 仅为已估值资产小计，暂停快照。"
+          },
+          "realizedPnlComplete": {
+            "type": "boolean",
+            "description": "首次回溯已完成且已读取成交可完整核算。false 时数值为暂计，可能随同步补齐调整。"
+          },
+          "feePnl": {
+            "$ref": "#/components/schemas/NullableAmount",
+            "description": "已读取成交手续费即时折算 USDT 后的负值；缺汇率或跨币成交等无法完整核算时为 null。"
           }
         }
       },

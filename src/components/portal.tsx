@@ -677,6 +677,9 @@ export function Portal() {
                   <div className="stat">
                     <div className="stat-label">
                       已实现盈亏
+                      {data.summary.realizedPnl !== null &&
+                        !data.summary.realizedPnlComplete &&
+                        "（暂计）"}
                       <ArrowUpRight size={17} />
                     </div>
                     <div

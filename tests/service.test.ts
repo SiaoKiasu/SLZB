@@ -44,6 +44,28 @@ const base = {
   ordersComplete: true,
 };
 describe("snapshot and valuation integrity", () => {
+  it("shows buy-only fees while discovery is incomplete and clearly marks the value provisional", async () => {
+    const c = config("buy-fees-during-sync");
+    const data = demoData();
+    data.tradesComplete = false;
+    for (const market of Object.values(data.ledger!.markets)) {
+      market.trades = market.trades.filter((t) => t.side === "BUY");
+      for (const t of market.trades) {
+        t.fee = "0.1";
+        t.feeAsset = "USDT";
+      }
+    }
+    mocks.load.mockResolvedValue(data);
+    mocks.history.mockResolvedValue([]);
+    const result = await dashboard(c);
+    expect(result.summary).toMatchObject({
+      realizedPnl: "-2",
+      feePnl: "-2",
+      realizedPnlComplete: false,
+    });
+    expect(result.summary.realizedPnlNote).toContain("暂计");
+    expect(result.summary.realizedPnlNote).toContain("同步中");
+  });
   it("keeps realized PnL independent of manual holding costs and their storage availability", async () => {
     const c = config("trade-realized-independent");
     mocks.load.mockResolvedValue(demoData());

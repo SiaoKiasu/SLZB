@@ -62,7 +62,7 @@ Base URL 为本地 `http://localhost:3000` 或部署域名。所有账户接口�
 
 `connection.tradesComplete` 表示当前已发现交易对都完成首次分页回溯，且本轮无成交查询失败；不是所有历史操作均已覆盖的保证。`connection.historySync` 返回 `{ scanned, total, oldestCheck }`，时间为毫秒或 null；`connection.symbols` 为已发现有成交的交易对。不同交易对轮转增量查询，最早检查时间表达查询范围的时效性。`ordersComplete=false` 时空列表不是“没有挂单”。
 
-`summary` 新增 `realizedPnl`、`principal`（可为 null），`cash`、`cashFree`、`cashLocked`（十进制字符串，USDT）。`cash` 包含冻结 USDT，不含其他稳定币。`equity` 优先使用 Binance 钱包接口（`quoteAsset=USDT`）返回的 Spot `balance`，失败或测试网才本地估算；`equitySource` 为 `exchange` / `calculated`，`equityComplete` 表示总额是否完整。官方估值不依赖本地逐币行情完整性，实时与 Cron 快照都使用同一规则。`unrealizedPnl` 仅汇总非稳定币；其成本或行情缺失时为 null，稳定币持仓浮盈为 null。金额 null 表示未知；持仓表成本完全由管理员输入。持仓浮盈亏立即按管理员成本计算，不等待历史扫描。已实现盈亏按成交记录移动加权平均匹配历史买入；买入手续费先资本化，卖出时按比例结转，同时扣除卖出手续费。第三币手续费按成交分钟历史收盘价近似折算，汇率随账本持久化。历史买入不足、已卖出部分缺手续费汇率、扫描未完或存在非 USDT 成交时为 null；realizedPnlNote 给出原因。仅买入未卖出时已实现盈亏为 0，待分摊买入手续费不会提前扣除。下架未发现交易对、闪兑和资金流水不在范围内。
+`summary` 新增 `realizedPnl`、`principal`（可为 null），`cash`、`cashFree`、`cashLocked`（十进制字符串，USDT）。`cash` 包含冻结 USDT，不含其他稳定币。`equity` 优先使用 Binance 钱包接口（`quoteAsset=USDT`）返回的 Spot `balance`，失败或测试网才本地估算；`equitySource` 为 `exchange` / `calculated`，`equityComplete` 表示总额是否完整。官方估值不依赖本地逐币行情完整性，实时与 Cron 快照都使用同一规则。`unrealizedPnl` 仅汇总非稳定币；其成本或行情缺失时为 null，稳定币持仓浮盈为 null。金额 null 表示未知；持仓表成本完全由管理员输入。持仓浮盈亏立即按管理员成本计算，不等待历史扫描。已实现盈亏按成交记录移动加权平均匹配历史买入；买卖手续费发生时立即扣除，后续卖出不再重复计入已扣费用。第三币手续费按成交分钟历史收盘价近似折算，汇率随账本持久化。`feePnl` 为已读取成交手续费折算 USDT 后的负值；`realizedPnlComplete` 表示首次回溯是否完成且已读取成交能完整核算。同步中可返回暂计 `realizedPnl`，须结合该标志和 `realizedPnlNote` 展示。历史买入不足、缺手续费汇率、存在非 USDT 成交或扫描中尚无成交时为 null。仅买入未卖出时已实现盈亏等于负的买入手续费。下架未发现交易对、闪兑和资金流水不在范围内。
 
 ## 管理员成本接口
 

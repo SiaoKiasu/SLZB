@@ -80,6 +80,8 @@ export type Dashboard = {
     costCoverage: number;
     totalPnl: string | null;
     realizedPnl: string | null;
+    realizedPnlComplete: boolean;
+    feePnl: string | null;
     realizedPnlNote: string;
     principal: string | null;
     cash: string;

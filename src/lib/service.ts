@@ -122,7 +122,7 @@ export async function dashboard(c: Config, persist = false): Promise<Dashboard> 
   if (accounting.unsupported)
     warnings.push("成交记录包含非 USDT 交易对，跨币成本尚未核算，暂不显示已实现盈亏总额。");
   warnings.push(
-    "已实现盈亏按成交记录移动加权平均核算；买入手续费随卖出部分分摊，卖出手续费当次扣除。手工持仓成本只影响未实现盈亏。转账、闪兑等非成交变动不在此口径内。",
+    "已实现盈亏为平仓收益减全部已发生买卖手续费；买入手续费立即扣除，卖出时不重复扣费。同步期间显示已读取成交的暂计值，可能随历史补齐调整。手工成本只影响未实现盈亏，转账、闪兑等非成交变动不在此口径内。",
   );
   if (accounting.estimatedFees)
     warnings.push(
@@ -148,9 +148,13 @@ export async function dashboard(c: Config, persist = false): Promise<Dashboard> 
       unrealizedPnl:
         costed.length === nonStableHoldings.length ? sum(costed.map((h) => h.unrealizedPnl)) : null,
       realizedPnl: accounting.realizedPnl,
+      realizedPnlComplete: accounting.complete,
+      feePnl: accounting.feePnl,
       realizedPnlNote:
         accounting.realizedPnl !== null
-          ? "按成交核算 · 已扣对应买卖手续费"
+          ? accounting.complete
+            ? "按成交核算 · 已扣全部买卖手续费"
+            : "历史同步中 · 已同步成交暂计（含手续费）"
           : [
               ...(!data.tradesComplete ? ["成交历史同步中"] : []),
               ...(accounting.missingBuys.length

@@ -1,0 +1,433 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "SLZB Spot Monitor",
+    "version": "0.1.0",
+    "description": "单账户只读现货监控。金额为十进制字符串；缺失金额为 null。完整口径见 API.md。"
+  },
+  "servers": [
+    { "url": "http://localhost:3000", "description": "Local; replace with your deployment URL" }
+  ],
+  "security": [{ "sessionCookie": [] }, { "apiBearer": [] }],
+  "paths": {
+    "/api/health": {
+      "get": {
+        "operationId": "health",
+        "summary": "服务存活检查",
+        "security": [],
+        "responses": { "200": { "description": "Service running" } }
+      }
+    },
+    "/api/session": {
+      "get": {
+        "operationId": "session",
+        "summary": "验证会话",
+        "responses": {
+          "200": { "description": "Authenticated" },
+          "401": { "$ref": "#/components/responses/Error" }
+        }
+      },
+      "post": {
+        "operationId": "login",
+        "summary": "密码登录（同源 Origin 必需）",
+        "security": [],
+        "parameters": [{ "$ref": "#/components/parameters/Origin" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["password"],
+                "properties": { "password": { "type": "string", "format": "password" } }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Sets slzb_session cookie" },
+          "401": { "$ref": "#/components/responses/Error" },
+          "429": { "$ref": "#/components/responses/Error" }
+        }
+      },
+      "delete": {
+        "operationId": "logout",
+        "summary": "清除会话（同源 Origin 必需）",
+        "parameters": [{ "$ref": "#/components/parameters/Origin" }],
+        "responses": { "200": { "description": "Cookie cleared" } }
+      }
+    },
+    "/api/dashboard": {
+      "get": {
+        "operationId": "dashboard",
+        "summary": "聚合账户数据，不写快照",
+        "responses": {
+          "200": {
+            "description": "Dashboard",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Dashboard" } }
+            }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/api/holdings": {
+      "get": {
+        "operationId": "holdings",
+        "summary": "全部非零现货持仓",
+        "responses": {
+          "200": {
+            "description": "Holdings envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/Holding" }
+                    },
+                    "updatedAt": { "type": "integer" },
+                    "warnings": { "$ref": "#/components/schemas/Warnings" }
+                  }
+                }
+              }
+            }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/api/pnl": {
+      "get": {
+        "operationId": "pnl",
+        "summary": "估值和手工本金/成本口径盈亏",
+        "responses": {
+          "200": {
+            "description": "Summary envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": { "$ref": "#/components/schemas/Summary" },
+                    "updatedAt": { "type": "integer" },
+                    "warnings": { "$ref": "#/components/schemas/Warnings" }
+                  }
+                }
+              }
+            }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/api/trades": {
+      "get": {
+        "operationId": "trades",
+        "summary": "最近成交或单交易对 ID 分页",
+        "parameters": [
+          {
+            "name": "symbol",
+            "in": "query",
+            "schema": { "type": "string" },
+            "description": "Must be in TRACKED_SYMBOLS"
+          },
+          {
+            "name": "fromId",
+            "in": "query",
+            "schema": { "type": "string", "pattern": "^[0-9]{1,16}$" },
+            "description": "Requires symbol. Use 0 to begin forward pagination."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": { "type": "integer", "minimum": 1, "maximum": 1000, "default": 100 },
+            "description": "Requires symbol"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Trade envelope or paginated response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": { "type": "array", "items": { "$ref": "#/components/schemas/Trade" } },
+                    "nextFromId": { "type": ["string", "null"] },
+                    "coverage": { "type": "string" },
+                    "updatedAt": { "type": "integer" },
+                    "warnings": { "$ref": "#/components/schemas/Warnings" }
+                  }
+                }
+              }
+            }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/api/orders": {
+      "get": {
+        "operationId": "orders",
+        "summary": "当前现货挂单",
+        "responses": {
+          "200": {
+            "description": "Orders envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": { "type": "array", "items": { "$ref": "#/components/schemas/Order" } },
+                    "updatedAt": { "type": "integer" },
+                    "warnings": { "$ref": "#/components/schemas/Warnings" }
+                  }
+                }
+              }
+            }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/api/history": {
+      "get": {
+        "operationId": "history",
+        "summary": "近 90 天净值，每小时末点",
+        "responses": {
+          "200": {
+            "description": "History envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/Snapshot" }
+                    },
+                    "updatedAt": { "type": "integer" },
+                    "warnings": { "$ref": "#/components/schemas/Warnings" }
+                  }
+                }
+              }
+            }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/api/connection": {
+      "get": {
+        "operationId": "connection",
+        "summary": "不含密钥的连接及覆盖状态",
+        "responses": {
+          "200": {
+            "description": "Connection envelope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "allOf": [
+                        { "$ref": "#/components/schemas/Connection" },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "source": { "type": "string" },
+                            "environment": { "type": "string" }
+                          }
+                        }
+                      ]
+                    },
+                    "updatedAt": { "type": "integer" },
+                    "warnings": { "$ref": "#/components/schemas/Warnings" }
+                  }
+                }
+              }
+            }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/api/sync": {
+      "post": {
+        "operationId": "sync",
+        "summary": "同步数据并尝试保存快照；Cookie 调用需要同源 Origin",
+        "parameters": [{ "$ref": "#/components/parameters/Origin" }],
+        "responses": {
+          "200": {
+            "description": "Dashboard; check connection.snapshotsSaved",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Dashboard" } }
+            }
+          },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/api/cron": {
+      "get": {
+        "operationId": "cron",
+        "summary": "后台保存净值快照",
+        "security": [{ "cronBearer": [] }],
+        "responses": {
+          "200": { "description": "Snapshot saved" },
+          "401": { "$ref": "#/components/responses/Error" },
+          "503": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "sessionCookie": { "type": "apiKey", "in": "cookie", "name": "slzb_session" },
+      "apiBearer": { "type": "http", "scheme": "bearer", "description": "MONITOR_API_TOKEN" },
+      "cronBearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "CRON_SECRET, separate from API token"
+      }
+    },
+    "parameters": {
+      "Origin": {
+        "name": "Origin",
+        "in": "header",
+        "schema": { "type": "string", "format": "uri" },
+        "description": "Required for cookie-based writes; must equal request origin. Verified API Bearer is exempt."
+      }
+    },
+    "responses": {
+      "Error": {
+        "description": "Sanitized error",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "required": ["error"],
+              "properties": {
+                "error": {
+                  "type": "object",
+                  "required": ["code", "message"],
+                  "properties": { "code": { "type": "string" }, "message": { "type": "string" } }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "Amount": {
+        "type": "string",
+        "description": "Decimal string, may use exponent notation for dust"
+      },
+      "NullableAmount": {
+        "type": ["string", "null"],
+        "description": "null means unknown, never zero"
+      },
+      "Warnings": { "type": "array", "items": { "type": "string" } },
+      "Holding": {
+        "type": "object",
+        "properties": {
+          "asset": { "type": "string" },
+          "free": { "$ref": "#/components/schemas/Amount" },
+          "locked": { "$ref": "#/components/schemas/Amount" },
+          "quantity": { "$ref": "#/components/schemas/Amount" },
+          "price": { "$ref": "#/components/schemas/NullableAmount" },
+          "value": { "$ref": "#/components/schemas/NullableAmount" },
+          "allocation": { "type": "number" },
+          "change24h": { "type": ["number", "null"] },
+          "averageCost": { "$ref": "#/components/schemas/NullableAmount" },
+          "unrealizedPnl": { "$ref": "#/components/schemas/NullableAmount" }
+        }
+      },
+      "Trade": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "symbol": { "type": "string" },
+          "side": { "enum": ["BUY", "SELL"] },
+          "price": { "$ref": "#/components/schemas/Amount" },
+          "quantity": { "$ref": "#/components/schemas/Amount" },
+          "quoteQuantity": { "$ref": "#/components/schemas/Amount" },
+          "fee": { "$ref": "#/components/schemas/Amount" },
+          "feeAsset": { "type": "string" },
+          "time": { "type": "integer" },
+          "isMaker": { "type": "boolean" }
+        }
+      },
+      "Order": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "symbol": { "type": "string" },
+          "side": { "enum": ["BUY", "SELL"] },
+          "type": { "type": "string" },
+          "price": { "$ref": "#/components/schemas/Amount" },
+          "quantity": { "$ref": "#/components/schemas/Amount" },
+          "executedQuantity": { "$ref": "#/components/schemas/Amount" },
+          "status": { "type": "string" },
+          "time": { "type": "integer" }
+        }
+      },
+      "Snapshot": {
+        "type": "object",
+        "properties": {
+          "time": { "type": "integer" },
+          "equity": { "$ref": "#/components/schemas/Amount" }
+        }
+      },
+      "Summary": {
+        "type": "object",
+        "properties": {
+          "equity": { "$ref": "#/components/schemas/Amount" },
+          "pricedAssets": { "type": "integer" },
+          "unpricedAssets": { "type": "integer" },
+          "unrealizedPnl": { "$ref": "#/components/schemas/NullableAmount" },
+          "costCoverage": { "type": "integer" },
+          "totalPnl": { "$ref": "#/components/schemas/NullableAmount" },
+          "baseline": { "$ref": "#/components/schemas/NullableAmount" },
+          "baselineAt": { "type": ["string", "null"], "format": "date-time" },
+          "netFlows": { "$ref": "#/components/schemas/NullableAmount" },
+          "stablecoinValue": { "$ref": "#/components/schemas/Amount" },
+          "tradeCount": { "type": "integer" }
+        }
+      },
+      "Connection": {
+        "type": "object",
+        "properties": {
+          "database": { "type": "boolean" },
+          "snapshotsSaved": { "type": "boolean" },
+          "symbols": { "type": "array", "items": { "type": "string" } },
+          "tradesComplete": {
+            "type": "boolean",
+            "description": "Configured symbol requests succeeded, not all historical trades"
+          },
+          "ordersComplete": { "type": "boolean" }
+        }
+      },
+      "Dashboard": {
+        "type": "object",
+        "properties": {
+          "source": { "enum": ["demo", "binance"] },
+          "accountLabel": { "type": "string" },
+          "environment": { "type": "string" },
+          "updatedAt": { "type": "integer" },
+          "summary": { "$ref": "#/components/schemas/Summary" },
+          "holdings": { "type": "array", "items": { "$ref": "#/components/schemas/Holding" } },
+          "trades": { "type": "array", "items": { "$ref": "#/components/schemas/Trade" } },
+          "orders": { "type": "array", "items": { "$ref": "#/components/schemas/Order" } },
+          "history": { "type": "array", "items": { "$ref": "#/components/schemas/Snapshot" } },
+          "connection": { "$ref": "#/components/schemas/Connection" },
+          "warnings": { "$ref": "#/components/schemas/Warnings" }
+        }
+      }
+    }
+  }
+}

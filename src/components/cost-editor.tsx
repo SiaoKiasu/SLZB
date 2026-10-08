@@ -160,7 +160,7 @@ export function CostEditor({
             ))}
           </div>
           <div className="cost-add">
-            <label htmlFor="cost-asset">补充币种（包括已清仓币和手续费币）</label>
+            <label htmlFor="cost-asset">补充币种</label>
             <div>
               <input
                 id="cost-asset"
@@ -187,11 +187,8 @@ export function CostEditor({
               </button>
             </div>
           </div>
-          <p className="cost-explanation">
-            保存会按新成本追溯重算已同步卖出的盈亏。卖出手续费也按这套成本折算。后续买入不会自动调整成本，请在需要时更新。
-          </p>
           <button type="submit" className="button primary">
-            {busy ? "处理中…" : "保存成本并重算"}
+            {busy ? "处理中…" : "保存成本"}
           </button>
         </fieldset>
       </form>

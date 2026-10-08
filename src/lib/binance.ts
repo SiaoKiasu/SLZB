@@ -4,6 +4,7 @@ import { z } from "zod";
 import type { Config } from "./config";
 import { AppError } from "./errors";
 import type { ProviderData, Trade, TradeLedger } from "./types";
+import { feeRateKey } from "./trade-pnl";
 const decimal = z.string().regex(/^\d+(\.\d+)?$/);
 const id = z.number().int().safe().transform(String);
 const tradeSchema = z.array(
@@ -264,6 +265,7 @@ export class BinanceClient {
       );
     const queue = [...priority, ...remaining].slice(0, 24);
     let failed = false;
+    let throttled = false;
     for (const [symbol, market] of queue) {
       if (Date.now() >= this.deadline - 2000) break;
       try {
@@ -289,9 +291,13 @@ export class BinanceClient {
         warnings.push(
           `${symbol} 成交读取失败：${e instanceof AppError ? e.message : "返回数据格式异常"}`,
         );
-        if (e instanceof AppError && e.code === "EXCHANGE_RATE_LIMIT") break;
+        if (e instanceof AppError && e.code === "EXCHANGE_RATE_LIMIT") {
+          throttled = true;
+          break;
+        }
       }
     }
+    if (!throttled) await this.syncFeeRates(ledger);
     const markets = Object.values(ledger.markets);
     const scanned = markets.filter((m) => m.complete).length;
     tradesComplete = catalogComplete && !failed && markets.length > 0 && scanned === markets.length;
@@ -319,5 +325,61 @@ export class BinanceClient {
         oldestCheck: checked.length ? Math.min(...checked) : null,
       },
     };
+  }
+  async syncFeeRates(ledger: TradeLedger) {
+    const rates = (ledger.feeRates ??= {});
+    const needed = new Map<string, { asset: string; minute: number }>();
+    for (const market of Object.values(ledger.markets)) {
+      if (market.quoteAsset !== "USDT") continue;
+      for (const trade of market.trades) {
+        if (
+          Number(trade.fee) <= 0 ||
+          trade.feeAsset === "USDT" ||
+          trade.feeAsset === market.baseAsset
+        )
+          continue;
+        const key = feeRateKey(trade.feeAsset, trade.time);
+        const minute = Math.floor(trade.time / 60000) * 60000;
+        if (rates[key]?.price || minute + 60000 > Date.now()) continue;
+        if (rates[key] && Date.now() - rates[key].checkedAt < 300000) continue;
+        needed.set(key, { asset: trade.feeAsset, minute });
+      }
+    }
+    // Persist successes and retry timestamps so old failures cannot starve new fees.
+    const queue = [...needed]
+      .sort(([a], [b]) => (rates[a]?.checkedAt ?? 0) - (rates[b]?.checkedAt ?? 0))
+      .slice(0, 12);
+    for (const [key, { asset, minute }] of queue) {
+      if (Date.now() >= this.deadline - 2000) break;
+      try {
+        const rows = z
+          .array(
+            z
+              .tuple([z.number(), decimal, decimal, decimal, decimal, decimal, z.number()])
+              .rest(z.unknown()),
+          )
+          .parse(
+            await this.request("/api/v3/klines", {
+              symbol: `${asset}USDT`,
+              interval: "1m",
+              startTime: String(minute),
+              endTime: String(minute + 59999),
+              limit: "1",
+            }),
+          );
+        const row = rows[0];
+        if (
+          rows.length !== 1 ||
+          row[0] !== minute ||
+          row[6] !== minute + 59999 ||
+          Number(row[4]) <= 0
+        )
+          throw new Error("Historical fee rate unavailable");
+        rates[key] = { price: row[4], checkedAt: Date.now() };
+      } catch (e) {
+        rates[key] = { price: null, checkedAt: Date.now() };
+        if (e instanceof AppError && e.code === "EXCHANGE_RATE_LIMIT") break;
+      }
+    }
   }
 }

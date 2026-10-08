@@ -7,7 +7,7 @@ import { demoData, demoHistory } from "./demo";
 import { STABLECOINS, totalPnl, valueHoldings, resolveEquity } from "./portfolio";
 import { readHistory, saveSnapshot } from "./storage";
 import type { Dashboard, ProviderData } from "./types";
-import { manualRealizedPnl } from "./manual-pnl";
+import { tradeRealizedPnl } from "./trade-pnl";
 import { readCosts } from "./cost-store";
 import { readLedger, saveLedger } from "./ledger-store";
 type Cached = { data: ProviderData; time: number };
@@ -73,11 +73,7 @@ export async function dashboard(c: Config, persist = false): Promise<Dashboard> 
   } catch {
     costStorageFailed = true;
   }
-  const accounting = manualRealizedPnl(
-    data.ledger,
-    costs,
-    data.tradesComplete && !costStorageFailed,
-  );
+  const accounting = tradeRealizedPnl(data.ledger, data.tradesComplete);
   const holdings = valueHoldings(data.balances, data.tickers, { ...costs, USDT: "1" });
   const sum = (values: (string | null)[]) =>
     values.reduce<Decimal>((a, v) => a.plus(v ?? 0), new Decimal(0)).toString();
@@ -112,21 +108,26 @@ export async function dashboard(c: Config, persist = false): Promise<Dashboard> 
         : `${unpriced} 种资产缺少可用行情，当前总额仅为已估值资产小计，累计盈亏暂停计算。`,
     );
   const missingCosts = nonStableHoldings.filter((h) => h.averageCost === null).map((h) => h.asset);
-  if (costStorageFailed)
-    warnings.push("管理员成本暂时无法读取，成本相关盈亏暂停计算，请稍后重试。");
+  if (costStorageFailed) warnings.push("管理员成本暂时无法读取，未实现盈亏暂停计算，请稍后重试。");
   else if (missingCosts.length)
     warnings.push(
       `尚未设置成本：${missingCosts.join("、")}。请管理员在成本管理中填写平均单位成本。`,
     );
-  if (accounting.missing.length)
+  if (accounting.missingBuys.length)
     warnings.push(
-      `已实现盈亏还缺少以下币种成本（包括已清仓资产或手续费币）：${accounting.missing.join("、")}。`,
+      `已实现盈亏缺少可匹配的历史买入：${accounting.missingBuys.join("、")}。转入资产的取得成本无法从当前成交记录确认。`,
     );
+  if (accounting.missingRates.length)
+    warnings.push(`已实现盈亏等待手续费历史汇率：${accounting.missingRates.join("、")}。`);
   if (accounting.unsupported)
-    warnings.push("已实现盈亏包含非 USDT 计价卖出，尚无法核算完整 USDT 收益，暂不显示总额。");
+    warnings.push("成交记录包含非 USDT 交易对，跨币成本尚未核算，暂不显示已实现盈亏总额。");
   warnings.push(
-    "持仓及卖出盈亏统一采用管理员当前设置的固定单位成本；修改会追溯重算已同步卖出。买入费用应包含在单位成本中，卖出手续费按同一成本折算。后续买入不会自动修改成本，需管理员维护。",
+    "已实现盈亏按成交记录移动加权平均核算；买入手续费随卖出部分分摊，卖出手续费当次扣除。手工持仓成本只影响未实现盈亏。转账、闪兑等非成交变动不在此口径内。",
   );
+  if (accounting.estimatedFees)
+    warnings.push(
+      "BNB 等第三币手续费按成交所在分钟的历史收盘价折算 USDT，属于近似折算，不使用当前行情或手工成本。",
+    );
   return {
     source: c.DATA_SOURCE,
     accountLabel: c.ACCOUNT_LABEL,
@@ -149,12 +150,16 @@ export async function dashboard(c: Config, persist = false): Promise<Dashboard> 
       realizedPnl: accounting.realizedPnl,
       realizedPnlNote:
         accounting.realizedPnl !== null
-          ? "已同步卖出 · 管理员成本口径"
+          ? "按成交核算 · 已扣对应买卖手续费"
           : [
-              ...(costStorageFailed ? ["成本暂时无法读取"] : []),
               ...(!data.tradesComplete ? ["成交历史同步中"] : []),
-              ...(accounting.missing.length ? [`缺 ${accounting.missing.join("、")} 成本`] : []),
-              ...(accounting.unsupported ? ["非 USDT 卖出待核算"] : []),
+              ...(accounting.missingBuys.length
+                ? [`缺 ${accounting.missingBuys.join("、")} 历史买入`]
+                : []),
+              ...(accounting.missingRates.length
+                ? [`待补 ${accounting.missingRates.join("、")} 手续费汇率`]
+                : []),
+              ...(accounting.unsupported ? ["跨币成交待核算"] : []),
             ].join(" · ") || "尚无可核算的成交历史",
       principal: demo ? "100000" : (c.PRINCIPAL_USDT ?? null),
       cash: cash?.quantity ?? "0",

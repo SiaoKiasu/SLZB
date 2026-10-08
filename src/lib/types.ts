@@ -42,7 +42,11 @@ export type MarketLedger = {
   checkedAt: number;
   trades: Trade[];
 };
-export type TradeLedger = { version: 1; markets: Record<string, MarketLedger> };
+export type TradeLedger = {
+  version: 1;
+  markets: Record<string, MarketLedger>;
+  feeRates?: Record<string, { price: string | null; checkedAt: number }>;
+};
 export type HistorySync = { scanned: number; total: number; oldestCheck: number | null };
 export type ProviderData = {
   spotEquity?: string | null;

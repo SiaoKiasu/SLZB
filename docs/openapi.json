@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "SLZB Spot Monitor",
-    "version": "0.5.2",
+    "version": "0.6.0",
     "description": "多用户现货监控：普通用户只读绑定账户；管理员可切换启用账户并维护手工成本。持久 Cookie 自动续期。"
   },
   "servers": [
@@ -544,7 +544,7 @@
         "description": "需要管理员角色，按 accountId 选择启用账户。写入还需同源 Origin。成本完全手动维护。"
       },
       "put": {
-        "summary": "管理员保存成本并追溯重算盈亏",
+        "summary": "管理员保存持仓成本并重算未实现盈亏",
         "description": "需要管理员角色，按 accountId 选择启用账户。写入还需同源 Origin。成本完全手动维护。",
         "requestBody": {
           "required": true,
@@ -826,7 +826,8 @@
             "type": "integer"
           },
           "realizedPnl": {
-            "$ref": "#/components/schemas/NullableAmount"
+            "$ref": "#/components/schemas/NullableAmount",
+            "description": "成交记录移动加权平均：卖出所得减对应历史买入成本及买入手续费分摊，再扣卖出手续费。手工成本不影响此值。"
           },
           "principal": {
             "$ref": "#/components/schemas/NullableAmount"
@@ -842,7 +843,7 @@
           },
           "realizedPnlNote": {
             "type": "string",
-            "description": "已实现盈亏口径或无法计算的具体原因（历史同步、缺少成本、非 USDT 卖出等）。"
+            "description": "成交盈亏口径或无法计算原因：历史同步、缺历史买入、缺手续费历史汇率、跨币成交等。"
           },
           "equitySource": {
             "type": "string",

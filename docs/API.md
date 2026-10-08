@@ -20,7 +20,7 @@ Base URL 为本地 `http://localhost:3000` 或部署域名。所有账户接口�
 | DELETE | `/api/session`                                   | 退出当前浏览器                                 |
 | GET    | `/api/dashboard`                                 | 当前用户绑定账户的聚合视图                     |
 | GET    | `/api/holdings`                                  | 当前账户持仓                                   |
-| GET    | `/api/pnl`                                       | 当前账户估值、管理员成本口径盈亏及本金         |
+| GET    | `/api/pnl`                                       | 当前账户估值、成交盈亏、持仓浮盈及本金         |
 | GET    | `/api/trades`                                    | 已同步成交中最近 1,000 笔                      |
 | GET    | `/api/trades?symbol=BTCUSDT&fromId=0&limit=1000` | 当前账户单交易对向后分页                       |
 | GET    | `/api/orders`                                    | 当前账户全 Spot 钱包当前挂单                   |
@@ -62,14 +62,14 @@ Base URL 为本地 `http://localhost:3000` 或部署域名。所有账户接口�
 
 `connection.tradesComplete` 表示当前已发现交易对都完成首次分页回溯，且本轮无成交查询失败；不是所有历史操作均已覆盖的保证。`connection.historySync` 返回 `{ scanned, total, oldestCheck }`，时间为毫秒或 null；`connection.symbols` 为已发现有成交的交易对。不同交易对轮转增量查询，最早检查时间表达查询范围的时效性。`ordersComplete=false` 时空列表不是“没有挂单”。
 
-`summary` 新增 `realizedPnl`、`principal`（可为 null），`cash`、`cashFree`、`cashLocked`（十进制字符串，USDT）。`cash` 包含冻结 USDT，不含其他稳定币。`equity` 优先使用 Binance 钱包接口（`quoteAsset=USDT`）返回的 Spot `balance`，失败或测试网才本地估算；`equitySource` 为 `exchange` / `calculated`，`equityComplete` 表示总额是否完整。官方估值不依赖本地逐币行情完整性，实时与 Cron 快照都使用同一规则。`unrealizedPnl` 仅汇总非稳定币；其成本或行情缺失时为 null，稳定币持仓浮盈为 null。金额 null 表示未知；成本完全由管理员输入，不从历史推算。持仓浮盈亏立即按管理员成本计算，不等待历史扫描。已实现盈亏按全部已同步 USDT 卖出量乘当前手工成本扣除，并将卖出费用按同一成本折算；缺币种/手续费币成本、扫描未完或存在非 USDT 卖出时为 null。下架未发现交易对、闪兑和资金流水不在范围内。
+`summary` 新增 `realizedPnl`、`principal`（可为 null），`cash`、`cashFree`、`cashLocked`（十进制字符串，USDT）。`cash` 包含冻结 USDT，不含其他稳定币。`equity` 优先使用 Binance 钱包接口（`quoteAsset=USDT`）返回的 Spot `balance`，失败或测试网才本地估算；`equitySource` 为 `exchange` / `calculated`，`equityComplete` 表示总额是否完整。官方估值不依赖本地逐币行情完整性，实时与 Cron 快照都使用同一规则。`unrealizedPnl` 仅汇总非稳定币；其成本或行情缺失时为 null，稳定币持仓浮盈为 null。金额 null 表示未知；持仓表成本完全由管理员输入。持仓浮盈亏立即按管理员成本计算，不等待历史扫描。已实现盈亏按成交记录移动加权平均匹配历史买入；买入手续费先资本化，卖出时按比例结转，同时扣除卖出手续费。第三币手续费按成交分钟历史收盘价近似折算，汇率随账本持久化。历史买入不足、已卖出部分缺手续费汇率、扫描未完或存在非 USDT 成交时为 null；realizedPnlNote 给出原因。仅买入未卖出时已实现盈亏为 0，待分摊买入手续费不会提前扣除。下架未发现交易对、闪兑和资金流水不在范围内。
 
 ## 管理员成本接口
 
 - `GET /api/costs`：仅 `role=admin`，返回选定账户 `{ costs, revision, updatedAt, updatedBy, writable }`。普通用户返回 403。
 - `PUT /api/costs`：需要同源 Origin 和管理员会话。正文 `{ "revision": null, "costs": { "BTC": "58000", "BNB": "500" } }`。首次 revision 为 null，后续提交 GET 获得的 UUID。完整替换成本记录；移除币种代表未设置，显式 `"0"` 表示零成本。USDT 只能为 1 或省略。限 500 个币，金额最多 20 位整数及 16 位小数，不能负数。
 - 管理员通过 URL 的 accountId 选择任一启用账户，不传则使用默认账户。无效/停用账户返回 404，绝不回退写入其他账户。普通用户不能调用成本管理接口，正文额外字段被拒绝。冲突 409；Vercel 未配置 DATABASE_URL 时写入 503；保存成功只返回成本元数据，不暴露密钥或配置文件。审计存储于服务端。
-- 修改会追溯重算历史卖出；成本不会被新成交自动调整。新成本每次聚合请求从持久存储读取，不受交易所 30 秒缓存影响。
+- 修改只重算未实现盈亏，不改变已实现盈亏；手工成本不会被新成交自动调整。新成本每次聚合请求从持久存储读取，不受交易所 30 秒缓存影响。
 
 `totalPnl/baseline/baselineAt/netFlows/stablecoinValue` 保留兼容旧客户端；界面不再把 totalPnl 当作已实现盈亏。新配置不需要旧 performance 字段。`tradeCount` 是全部已同步成交数，列表最多返回 1,000 笔；单交易对 API 可继续分页。
 

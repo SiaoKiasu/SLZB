@@ -16,6 +16,7 @@ vi.mock("@/lib/storage", () => ({ saveSnapshot: mocks.save, readHistory: mocks.h
 import { dashboard } from "@/lib/service";
 import { getAccountConfig } from "@/lib/config";
 import { configure, fixture } from "./helpers";
+import { demoData } from "@/lib/demo";
 afterEach(() => {
   vi.unstubAllEnvs();
   vi.clearAllMocks();
@@ -43,6 +44,23 @@ const base = {
   ordersComplete: true,
 };
 describe("snapshot and valuation integrity", () => {
+  it("keeps realized PnL independent of manual holding costs and their storage availability", async () => {
+    const c = config("trade-realized-independent");
+    mocks.load.mockResolvedValue(demoData());
+    mocks.history.mockResolvedValue([]);
+    mocks.costs.mockResolvedValue({ costs: { BTC: "58000", ETH: "2380", SOL: "136", BNB: "545" } });
+    const before = await dashboard(c);
+    expect(before.summary.realizedPnl).toBe("160");
+    mocks.costs.mockResolvedValue({ costs: { BTC: "60000", ETH: "2380", SOL: "136", BNB: "545" } });
+    const after = await dashboard(c);
+    expect(after.summary.realizedPnl).toBe("160");
+    expect(after.summary.unrealizedPnl).not.toBe(before.summary.unrealizedPnl);
+    mocks.costs.mockRejectedValue(new Error("unavailable"));
+    const failed = await dashboard(c);
+    expect(failed.summary.realizedPnl).toBe("160");
+    expect(failed.summary.unrealizedPnl).toBeNull();
+    expect(failed.summary.realizedPnlNote).toContain("按成交核算");
+  });
   it.each(["456.12345678", "0"])(
     "prefers exchange equity %s and saves it even with unpriced holdings",
     async (spotEquity) => {

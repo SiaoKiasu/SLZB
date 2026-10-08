@@ -30,7 +30,7 @@ export async function GET(request: Request, context: { params: Promise<{ resourc
       const fromId = url.searchParams.get("fromId") ?? undefined;
       const limit = Number(url.searchParams.get("limit") ?? 100);
       if (
-        !c.symbols.includes(symbol) ||
+        !/^[A-Z0-9]{5,30}$/.test(symbol) ||
         (fromId && !/^\d{1,16}$/.test(fromId)) ||
         !Number.isInteger(limit) ||
         limit < 1 ||
@@ -38,7 +38,7 @@ export async function GET(request: Request, context: { params: Promise<{ resourc
       )
         throw new AppError(
           "INVALID_QUERY",
-          "交易对必须在配置列表中，limit 为 1–1000，fromId 为交易 ID。",
+          "交易对格式无效，limit 应为 1–1000，fromId 为交易 ID。",
           400,
         );
       if (c.DATA_SOURCE === "binance") {

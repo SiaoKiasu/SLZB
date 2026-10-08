@@ -34,7 +34,20 @@ export type Holding = Balance & {
   unrealizedPnl: string | null;
 };
 export type Snapshot = { time: number; equity: string };
+export type MarketLedger = {
+  baseAsset: string;
+  quoteAsset: string;
+  nextId: string;
+  complete: boolean;
+  checkedAt: number;
+  trades: Trade[];
+};
+export type TradeLedger = { version: 1; markets: Record<string, MarketLedger> };
+export type HistorySync = { scanned: number; total: number; oldestCheck: number | null };
 export type ProviderData = {
+  ledger?: TradeLedger;
+  historySync?: HistorySync;
+
   balances: Balance[];
   tickers: Ticker[];
   trades: Trade[];
@@ -59,6 +72,11 @@ export type Dashboard = {
     unrealizedPnl: string | null;
     costCoverage: number;
     totalPnl: string | null;
+    realizedPnl: string | null;
+    principal: string | null;
+    cash: string;
+    cashFree: string;
+    cashLocked: string;
     baseline: string | null;
     baselineAt: string | null;
     netFlows: string | null;
@@ -66,6 +84,7 @@ export type Dashboard = {
     tradeCount: number;
   };
   connection: {
+    historySync: HistorySync;
     database: boolean;
     snapshotsSaved: boolean;
     symbols: string[];

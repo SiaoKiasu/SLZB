@@ -6,3 +6,9 @@ CREATE TABLE IF NOT EXISTS slzb_snapshots (
   equity NUMERIC(38, 12) NOT NULL,
   PRIMARY KEY (account_id, bucket)
 );
+
+CREATE TABLE IF NOT EXISTS slzb_trade_ledgers (
+  account_id TEXT PRIMARY KEY,
+  revision TEXT NOT NULL,
+  data JSONB NOT NULL
+);

@@ -1,12 +1,48 @@
-import type { ProviderData, Snapshot } from "./types";
+import Decimal from "decimal.js";
+import type { ProviderData, Snapshot, Trade, TradeLedger } from "./types";
 export const demoCosts = { BTC: "58900", ETH: "2380", SOL: "136", BNB: "545" };
 export function demoData(): ProviderData {
   const now = Date.now();
+  const ledger: TradeLedger = { version: 1, markets: {} };
+  // A coherent simulated ledger: closed round trips plus the remaining positions.
+  const quantities = { BTC: "0.85", ETH: "8.4", SOL: "86", BNB: "5.2" };
+  let id = 100000;
+  for (const asset of Object.keys(demoCosts) as (keyof typeof demoCosts)[]) {
+    const symbol = `${asset}USDT`;
+    const trades: Trade[] = [];
+    const add = (side: "BUY" | "SELL", quantity: string, price: string, time: number) => {
+      trades.push({
+        id: String(id++),
+        symbol,
+        side,
+        quantity,
+        price,
+        quoteQuantity: new Decimal(quantity).mul(price).toString(),
+        fee: "0",
+        feeAsset: "USDT",
+        time,
+        isMaker: true,
+      });
+    };
+    for (let i = 0; i < 4; i++) {
+      add("BUY", "1", "100", now - (72 - i * 6) * 3600000);
+      add("SELL", "1", "110", now - (70 - i * 6) * 3600000);
+    }
+    add("BUY", quantities[asset], demoCosts[asset], now - 2 * 3600000);
+    ledger.markets[symbol] = {
+      baseAsset: asset,
+      quoteAsset: "USDT",
+      nextId: String(id),
+      complete: true,
+      checkedAt: now,
+      trades,
+    };
+  }
   return {
     balances: [
       { asset: "BTC", free: "0.82", locked: "0.03" },
       { asset: "ETH", free: "8.4", locked: "0" },
-      { asset: "USDT", free: "16320.5", locked: "2400" },
+      { asset: "USDT", free: "13173.00", locked: "2400" },
       { asset: "SOL", free: "86", locked: "0" },
       { asset: "BNB", free: "5.2", locked: "0" },
     ],
@@ -16,24 +52,11 @@ export function demoData(): ProviderData {
       { symbol: "SOLUSDT", lastPrice: "154.72", priceChangePercent: "-0.76" },
       { symbol: "BNBUSDT", lastPrice: "596.4", priceChangePercent: "0.92" },
     ],
-    trades: Array.from({ length: 36 }, (_, i) => {
-      const assets = ["BTC", "ETH", "SOL", "BNB"];
-      const asset = assets[i % 4];
-      const price = [66820, 2592.6, 155.8, 589.2][i % 4];
-      const quantity = [0.015, 0.5, 8, 0.6][i % 4];
-      return {
-        id: String(100000 + i),
-        symbol: `${asset}USDT`,
-        side: i % 3 === 2 ? "SELL" : "BUY",
-        price: String(price),
-        quantity: String(quantity),
-        quoteQuantity: String(price * quantity),
-        fee: String(price * quantity * 0.001),
-        feeAsset: "USDT",
-        time: now - (i * 172 + 8) * 60000,
-        isMaker: i % 2 === 0,
-      };
-    }),
+    ledger,
+    historySync: { scanned: 4, total: 4, oldestCheck: now },
+    trades: Object.values(ledger.markets)
+      .flatMap((m) => m.trades)
+      .sort((a, b) => b.time - a.time),
     orders: [
       {
         id: "20001",

@@ -1,4 +1,4 @@
-import { input, password, select, confirm } from "@inquirer/prompts";
+import { input, password, select } from "@inquirer/prompts";
 import { existsSync, readFileSync, writeFileSync, mkdirSync, renameSync, chmodSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { randomBytes } from "node:crypto";
@@ -99,46 +99,12 @@ async function editAccount(old, config) {
       old?.apiSecret ||
       "";
   }
-  const symbols = [
-    ...new Set(
-      (
-        await input({
-          message: "监控交易对（逗号分隔，包含已清仓交易对）",
-          default: old?.symbols.join(",") || "BTCUSDT,ETHUSDT,SOLUSDT,BNBUSDT",
-        })
-      )
-        .split(",")
-        .map((s) => s.trim().toUpperCase())
-        .filter(Boolean),
-    ),
-  ];
-  let costs = old?.costs || {};
-  let performance = old?.performance;
-  if (await confirm({ message: "现在维护持仓成本和累计盈亏口径？", default: false })) {
-    costs = JSON.parse(
-      await input({
-        message: '各币种剩余持仓成本 JSON（USDT），如 {"BTC":"58000"}',
-        default: JSON.stringify(costs),
-      }),
-    );
-    if (
-      await confirm({
-        message: "设置累计盈亏起始净值和期间净入金？",
-        default: Boolean(performance),
-      })
-    ) {
-      const baseline = await input({ message: "起始净值（USDT）", default: performance?.baseline });
-      const startedAt = await input({
-        message: "起始时间（ISO 格式，如 2026-01-01T00:00:00Z）",
-        default: performance?.startedAt,
-      });
-      const netFlows = await input({
-        message: "起始时间以来净入金（USDT，无则填写 0）",
-        default: performance?.netFlows,
-      });
-      performance = { baseline, startedAt, netFlows };
-    } else performance = undefined;
-  }
+  const principal = await input({
+    message: "账户本金（初始投入 USDT，可留空；不是持仓成本）",
+    default: old?.principal,
+    validate: (v) => !v || /^\d+(\.\d+)?$/.test(v) || "请输入非负金额，或留空",
+  });
+  console.log("持仓与交易对将自动发现，成交历史分批同步并用于重建成本，无需填写成本 JSON。");
   return accountSchema.parse({
     id,
     label,
@@ -146,9 +112,9 @@ async function editAccount(old, config) {
     environment,
     apiKey,
     apiSecret,
-    symbols,
-    costs,
-    performance,
+    principal: principal || undefined,
+    symbols: old?.symbols || [],
+    performance: old?.performance,
     enabled: old?.enabled ?? true,
   });
 }
@@ -193,7 +159,7 @@ async function main() {
       message: "选择操作",
       choices: [
         { name: "1. 新增交易所账户 / API", value: "account-add" },
-        { name: "2. 修改交易所账户 / API / 盈亏口径", value: "account-edit" },
+        { name: "2. 修改交易所账户 / API / 本金", value: "account-edit" },
         { name: "3. 新增查看用户并绑定账户", value: "user-add" },
         { name: "4. 修改用户密码", value: "password" },
         { name: "5. 更改用户绑定的账户", value: "binding" },

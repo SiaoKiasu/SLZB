@@ -78,6 +78,7 @@ export function getAccountConfig(app: AppConfig, accountId: string) {
     DATABASE_URL: app.databaseUrl,
     symbols: a.symbols,
     costs: a.costs,
+    PRINCIPAL_USDT: a.principal,
     PERFORMANCE_BASELINE_USDT: a.performance?.baseline,
     PERFORMANCE_BASELINE_AT: a.performance?.startedAt,
     PERFORMANCE_NET_FLOWS_USDT: a.performance?.netFlows,

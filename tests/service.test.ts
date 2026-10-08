@@ -5,6 +5,7 @@ vi.mock("@/lib/binance", () => ({
     load = mocks.load;
   },
 }));
+vi.mock("@/lib/ledger-store", () => ({ readLedger: vi.fn(), saveLedger: vi.fn() }));
 vi.mock("@/lib/storage", () => ({ saveSnapshot: mocks.save, readHistory: mocks.history }));
 import { dashboard } from "@/lib/service";
 import { getAccountConfig } from "@/lib/config";
@@ -35,6 +36,29 @@ const base = {
   ordersComplete: true,
 };
 describe("snapshot and valuation integrity", () => {
+  it("separates USDT cash, frozen funds and principal from other stablecoins and missing costs", async () => {
+    const c = { ...config("cash-principal-test"), PRINCIPAL_USDT: "75" };
+    mocks.load.mockResolvedValue({
+      ...base,
+      balances: [
+        { asset: "USDT", free: "100", locked: "20" },
+        { asset: "USDC", free: "50", locked: "0" },
+      ],
+      tickers: [{ symbol: "USDCUSDT", lastPrice: "0.99", priceChangePercent: "0" }],
+    });
+    mocks.history.mockResolvedValue([]);
+    const d = await dashboard(c);
+    expect(d.summary).toMatchObject({
+      equity: "169.5",
+      principal: "75",
+      cash: "120",
+      cashFree: "100",
+      cashLocked: "20",
+      stablecoinValue: "169.5",
+      unrealizedPnl: null,
+      realizedPnl: null,
+    });
+  });
   it("does not save incomplete equity or calculate total PnL when an asset is unpriced", async () => {
     const c = config("unpriced-test");
     mocks.load.mockResolvedValue({

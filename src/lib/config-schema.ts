@@ -14,7 +14,8 @@ export const accountSchema = z
     symbols: z
       .array(z.string().regex(/^[A-Z0-9]{5,30}$/))
       .max(20)
-      .default(["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT"]),
+      .default([]),
+    principal: amount.optional(),
     costs: z.record(z.string().regex(/^[A-Z0-9]+$/), amount).default({}),
     performance: z
       .object({

@@ -3,7 +3,7 @@ import { createHmac } from "node:crypto";
 import { z } from "zod";
 import type { Config } from "./config";
 import { AppError } from "./errors";
-import type { ProviderData, Trade } from "./types";
+import type { ProviderData, Trade, TradeLedger } from "./types";
 const decimal = z.string().regex(/^\d+(\.\d+)?$/);
 const id = z.number().int().safe().transform(String);
 const tradeSchema = z.array(
@@ -138,7 +138,7 @@ export class BinanceClient {
       .parse(await this.request("/api/v3/ticker/24hr"));
     return { balances: account.balances, tickers };
   }
-  async load(symbols: string[]): Promise<ProviderData> {
+  async load(symbols: string[] = [], previous?: TradeLedger): Promise<ProviderData> {
     const { balances, tickers } = await this.loadBalances();
     const warnings: string[] = [];
     let orders: ProviderData["orders"] = [];
@@ -175,36 +175,124 @@ export class BinanceClient {
       ordersComplete = false;
       warnings.push(`挂单读取失败：${e instanceof AppError ? e.message : "返回数据格式异常"}`);
     }
-    const trades: Trade[] = [];
-    // Two requests at a time keep large watchlists from bursting upstream limits.
-    for (let i = 0; i < symbols.length; i += 2) {
-      if (Date.now() >= this.deadline) {
-        tradesComplete = false;
-        warnings.push(`本次查询超时，尚未同步：${symbols.slice(i).join(", ")}。`);
-        break;
+    const ledger: TradeLedger = structuredClone(previous ?? { version: 1, markets: {} });
+    let catalogComplete = true;
+    try {
+      const info = z
+        .object({
+          symbols: z.array(
+            z.object({
+              symbol: z.string(),
+              baseAsset: z.string(),
+              quoteAsset: z.string(),
+              isSpotTradingAllowed: z.boolean().optional(),
+            }),
+          ),
+        })
+        .parse(await this.request("/api/v3/exchangeInfo"));
+      if (!info.symbols.length) throw new Error("empty market catalog");
+      for (const market of info.symbols) {
+        if (market.isSpotTradingAllowed === false) continue;
+        ledger.markets[market.symbol] ??= {
+          baseAsset: market.baseAsset,
+          quoteAsset: market.quoteAsset,
+          nextId: "0",
+          complete: false,
+          checkedAt: 0,
+          trades: [],
+        };
       }
-      const batch = await Promise.allSettled(symbols.slice(i, i + 2).map((s) => this.trades(s)));
-      batch.forEach((result, j) => {
-        if (result.status === "fulfilled") trades.push(...result.value);
-        else {
-          tradesComplete = false;
-          warnings.push(
-            `${symbols[i + j]} 成交读取失败：${result.reason instanceof AppError ? result.reason.message : "返回数据格式异常"}`,
-          );
-        }
-      });
+    } catch {
+      catalogComplete = false;
+      warnings.push("交易对目录暂未读取成功，历史发现和盈亏计算暂停；余额仍可查看。");
     }
-    warnings.push(
-      `成交列表仅包含所配置 ${symbols.length} 个交易对各自最近 100 笔；不代表全账户历史。`,
+    // Legacy configured pairs are optional discovery hints, never a holdings filter.
+    for (const symbol of symbols)
+      if (!ledger.markets[symbol] && symbol.endsWith("USDT")) {
+        ledger.markets[symbol] = {
+          baseAsset: symbol.slice(0, -4),
+          quoteAsset: "USDT",
+          nextId: "0",
+          complete: false,
+          checkedAt: 0,
+          trades: [],
+        };
+      }
+    const held = new Set(
+      balances.filter((b) => Number(b.free) + Number(b.locked) > 0).map((b) => b.asset),
     );
+    const open = new Set(orders.map((o) => o.symbol));
+    const entries = Object.entries(ledger.markets);
+    const important = ([symbol, m]: (typeof entries)[number]) =>
+      held.has(m.baseAsset) || open.has(symbol) || m.trades.length > 0;
+    // Reserve most of each batch for discovery/rotation so active pairs cannot starve closed positions.
+    const priority = entries
+      .filter((e) => important(e) && Date.now() - e[1].checkedAt >= 30000)
+      .sort(
+        (a, b) => Number(a[1].complete) - Number(b[1].complete) || a[1].checkedAt - b[1].checkedAt,
+      )
+      .slice(0, 8);
+    const chosen = new Set(priority.map(([s]) => s));
+    const remaining = entries
+      .filter(([s]) => !chosen.has(s))
+      .sort(
+        (a, b) => Number(a[1].complete) - Number(b[1].complete) || a[1].checkedAt - b[1].checkedAt,
+      );
+    const queue = [...priority, ...remaining].slice(0, 24);
+    let failed = false;
+    for (const [symbol, market] of queue) {
+      if (Date.now() >= this.deadline - 2000) break;
+      try {
+        const rows = await this.trades(symbol, market.nextId, 1000);
+        // Repeat reads and retries are idempotent even if an upstream page overlaps.
+        const unique = new Map(market.trades.map((t) => [t.id, t]));
+        for (const row of rows) unique.set(row.id, row);
+        market.trades = [...unique.values()];
+        if (rows.length) {
+          const last = rows.reduce(
+            (max, t) => (BigInt(t.id) > max ? BigInt(t.id) : max),
+            BigInt(market.nextId) - 1n,
+          );
+          market.nextId = (last + 1n).toString();
+        }
+        market.complete = rows.length < 1000;
+        market.checkedAt = Date.now();
+      } catch (e) {
+        failed = true;
+        market.complete = false;
+        // Rotate failed symbols behind other work; retry on subsequent refreshes.
+        market.checkedAt = Date.now();
+        warnings.push(
+          `${symbol} 成交读取失败：${e instanceof AppError ? e.message : "返回数据格式异常"}`,
+        );
+        if (e instanceof AppError && e.code === "EXCHANGE_RATE_LIMIT") break;
+      }
+    }
+    const markets = Object.values(ledger.markets);
+    const scanned = markets.filter((m) => m.complete).length;
+    tradesComplete = catalogComplete && !failed && markets.length > 0 && scanned === markets.length;
+    if (!tradesComplete)
+      warnings.push(
+        `历史自动同步中：${scanned}/${markets.length} 个交易对已完成首次回溯。保持页面打开会继续同步，包括已清仓交易对。`,
+      );
+    warnings.push(
+      "成本与盈亏按 API 可获得的现货成交估算；未包含已下架且目录不可发现的交易对、闪兑和转账的外部成本。不同交易对分批更新，非交易所官方盈亏。跨币交易、第三币手续费或余额无法对账时显示待核对。",
+    );
+    const checked = markets.filter((m) => m.complete).map((m) => m.checkedAt);
     return {
       balances,
       tickers,
-      trades: trades.sort((a, b) => b.time - a.time),
+      trades: markets.flatMap((m) => m.trades).sort((a, b) => b.time - a.time),
       orders,
       warnings,
       tradesComplete,
       ordersComplete,
+      ledger,
+      historySync: {
+        scanned,
+        total: markets.length,
+        oldestCheck: checked.length ? Math.min(...checked) : null,
+      },
     };
   }
 }

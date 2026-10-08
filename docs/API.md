@@ -20,8 +20,8 @@ Base URL 为本地 `http://localhost:3000` 或部署域名。所有账户接口�
 | DELETE | `/api/session`                                   | 退出当前浏览器                                 |
 | GET    | `/api/dashboard`                                 | 当前用户绑定账户的聚合视图                     |
 | GET    | `/api/holdings`                                  | 当前账户持仓                                   |
-| GET    | `/api/pnl`                                       | 当前账户估值及配置口径盈亏                     |
-| GET    | `/api/trades`                                    | 监控交易对各最近 100 笔成交                    |
+| GET    | `/api/pnl`                                       | 当前账户估值、自动盈亏及本金                   |
+| GET    | `/api/trades`                                    | 已同步成交中最近 1,000 笔                      |
 | GET    | `/api/trades?symbol=BTCUSDT&fromId=0&limit=1000` | 当前账户单交易对向后分页                       |
 | GET    | `/api/orders`                                    | 当前账户全 Spot 钱包当前挂单                   |
 | GET    | `/api/history`                                   | 当前账户近 90 天每小时末净值点                 |
@@ -35,7 +35,7 @@ Base URL 为本地 `http://localhost:3000` 或部署域名。所有账户接口�
 
 ## 成交分页与完整性
 
-`symbol` 必须在该用户所属账户的监控列表。`limit` 为 1–1000，`fromId` 为非负整数 ID；传 limit/fromId 时必须同时传 symbol。
+`symbol` 为 5–30 位大写字母/数字，由交易所验证是否存在；查询始终使用当前登录用户绑定账户的密钥，无需配置监控列表。`limit` 为 1–1000，`fromId` 为非负整数 ID；传 limit/fromId 时必须同时传 symbol。
 
 从 `fromId=0` 开始；收到 `nextFromId` 后传入下一次请求，直到 null。不传 fromId 时是交易所最近成交；之后的 nextFromId 只能读取更新的成交，不能用于倒序翻旧记录。
 
@@ -60,9 +60,11 @@ Base URL 为本地 `http://localhost:3000` 或部署域名。所有账户接口�
 }
 ```
 
-`connection.tradesComplete` 只表示本轮配置交易对查询都成功，不代表全历史完整。`ordersComplete=false` 时空列表不是“没有挂单”。历史接口不返回其他账户历史；存储 scope 不接受来自浏览器的参数。
+`connection.tradesComplete` 表示当前已发现交易对都完成首次分页回溯，且本轮无成交查询失败；不是所有历史操作均已覆盖的保证。`connection.historySync` 返回 `{ scanned, total, oldestCheck }`，时间为毫秒或 null；`connection.symbols` 为已发现有成交的交易对。不同交易对轮转增量查询，最早检查时间表达查询范围的时效性。`ordersComplete=false` 时空列表不是“没有挂单”。
 
-金额 null 表示未知。未知行情资产不计入小计，暂停累计盈亏及净值快照。浮盈亏仅汇总有成本的资产；累计盈亏需要管理员维护起始净值、时间及期间净入金。
+`summary` 新增 `realizedPnl`、`principal`（可为 null），`cash`、`cashFree`、`cashLocked`（十进制字符串，USDT）。`cash` 包含冻结 USDT，不含其他稳定币。`equity` 为现货钱包估值；`unrealizedPnl` 必须全部非 USDT 持仓成本可知，否则 null。金额 null 表示未知；尚未同步、数量无法对账、非 USDT 成交或第三币手续费不会当成零成本。已实现盈亏为可获得现货成交范围的移动加权估算，非官方 PnL；下架未发现交易对、闪兑和资金流水不在重建范围。
+
+`totalPnl/baseline/baselineAt/netFlows/stablecoinValue` 保留兼容旧客户端；界面不再把 totalPnl 当作已实现盈亏。新配置不需要旧 performance 字段。`tradeCount` 是全部已同步成交数，列表最多返回 1,000 笔；单交易对 API 可继续分页。
 
 ## Cron
 

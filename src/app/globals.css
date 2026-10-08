@@ -1720,3 +1720,42 @@ td small.inline {
 .demo-login strong {
   margin: 0 4px;
 }
+
+.capital-strip {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 16px 20px;
+  margin: -4px 0 24px;
+  background: #eff2eb;
+  border: 1px solid #dce3d5;
+  border-radius: 12px;
+}
+.capital-strip > div {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.capital-strip span {
+  font-size: 13px;
+  color: #596452;
+}
+.capital-strip strong {
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+}
+.capital-strip small,
+.sync-note {
+  color: #74806c;
+  font-size: 11px;
+}
+@media (max-width: 600px) {
+  .capital-strip {
+    padding: 14px;
+  }
+  .capital-strip > div {
+    gap: 8px;
+  }
+}

@@ -573,7 +573,7 @@ export function Portal() {
                 <div className="stats">
                   <div className="stat featured">
                     <div className="stat-label">
-                      {data.summary.unpricedAssets ? "已估值资产小计" : "总资产估值"}
+                      {data.summary.unpricedAssets ? "已估值资产小计" : "总资产估值 · Equity"}
                       <Wallet size={17} />
                     </div>
                     <div className="stat-value">
@@ -587,24 +587,24 @@ export function Portal() {
                   </div>
                   <div className="stat">
                     <div className="stat-label">
-                      账户累计盈亏
+                      已实现盈亏
                       <ArrowUpRight size={17} />
                     </div>
                     <div
-                      className={`stat-value ${Number(data.summary.totalPnl) < 0 ? "negative" : "positive"}`}
+                      className={`stat-value ${Number(data.summary.realizedPnl) < 0 ? "negative" : "positive"}`}
                     >
-                      {profit(data.summary.totalPnl)}
+                      {profit(data.summary.realizedPnl)}
                       <span>USDT</span>
                     </div>
                     <div className="stat-note">
-                      {data.summary.totalPnl === null
-                        ? "管理员设定统计口径后显示"
-                        : `起始净值 ${money(data.summary.baseline)} · 手工资金口径`}
+                      {data.summary.realizedPnl === null
+                        ? "历史同步中或成本待核对"
+                        : "已同步成交 · 移动加权成本估算"}
                     </div>
                   </div>
                   <div className="stat">
                     <div className="stat-label">
-                      已知成本持仓浮盈亏
+                      未实现盈亏
                       <BarChart3 size={17} />
                     </div>
                     <div
@@ -614,19 +614,46 @@ export function Portal() {
                       <span>USDT</span>
                     </div>
                     <div className="stat-note">
-                      覆盖 {data.summary.costCoverage} 种资产 · 基于管理员成本口径
+                      {data.summary.unrealizedPnl === null
+                        ? "历史同步中或成本待核对"
+                        : `持仓市值 − 剩余成本 · ${data.summary.costCoverage} 种资产`}
                     </div>
                   </div>
                   <div className="stat">
                     <div className="stat-label">
-                      稳定币资产
+                      现金 · USDT
                       <Wallet size={17} />
                     </div>
                     <div className="stat-value">
-                      {money(data.summary.stablecoinValue)}
+                      {money(data.summary.cash)}
                       <span>USDT</span>
                     </div>
-                    <div className="stat-note">含可用与挂单冻结余额</div>
+                    <div className="stat-note">
+                      可用 {money(data.summary.cashFree)} · 冻结 {money(data.summary.cashLocked)}
+                    </div>
+                  </div>
+                </div>
+              )}
+              {(tab === "overview" || tab === "holdings") && (
+                <div className="capital-strip">
+                  <div>
+                    <span>账户本金</span>
+                    <strong>
+                      {data.summary.principal === null
+                        ? "尚未设置"
+                        : `${money(data.summary.principal)} USDT`}
+                    </strong>
+                    <small>管理员登记的初始投入</small>
+                  </div>
+                  <div className="sync-note">
+                    {data.source === "demo"
+                      ? "模拟成交账本"
+                      : `历史回溯 ${data.connection.historySync.scanned} / ${data.connection.historySync.total} 个交易对`}
+                    <small>
+                      {data.connection.historySync.oldestCheck
+                        ? `分批查询 · 最早检查 ${new Date(data.connection.historySync.oldestCheck).toLocaleString("zh-CN")}`
+                        : "首次同步需要一些时间"}
+                    </small>
                   </div>
                 </div>
               )}
@@ -767,7 +794,7 @@ export function Portal() {
                       <p>
                         {data.connection.tradesComplete
                           ? "账户的最新交易动态"
-                          : "部分交易对暂未同步成功"}
+                          : "历史成交正在分批同步"}
                       </p>
                     </div>
                     <button className="text-button" onClick={() => navigate("activity")}>
@@ -802,7 +829,7 @@ export function Portal() {
                       </strong>
                     </div>
                     <p>
-                      每个监控交易对最近 100 笔成交。
+                      自动发现交易对，列表展示最近 1,000 笔。
                       <br />
                       手续费按原币种展示。
                     </p>

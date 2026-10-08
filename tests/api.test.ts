@@ -85,9 +85,9 @@ describe("per-user monitoring API", () => {
     expect(calls).toContain("alice-key");
     expect(calls).toContain("bob-key");
   });
-  it("rejects foreign symbols, missing symbol pagination and unsupported resources", async () => {
+  it("rejects malformed symbols, missing symbol pagination and unsupported resources", async () => {
     configure();
-    for (const query of ["symbol=ETHUSDT", "symbol=BTCUSDT&limit=1001", "fromId=0"]) {
+    for (const query of ["symbol=../../bad", "symbol=BTCUSDT&limit=1001", "fromId=0"]) {
       expect((await GET(request(`/api/trades?${query}`), context("trades"))).status).toBe(400);
     }
     expect((await GET(request("/api/admin"), context("admin"))).status).toBe(404);

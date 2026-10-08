@@ -1848,3 +1848,38 @@ td small.inline {
     grid-template-columns: 1fr;
   }
 }
+
+.account-switcher {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 20px;
+  padding: 14px 18px;
+  border: 1px solid #d8dfd1;
+  border-radius: 10px;
+  background: #f0f4ed;
+}
+.account-switcher label {
+  font-size: 13px;
+  font-weight: 600;
+}
+.account-switcher select {
+  max-width: 100%;
+  min-width: 180px;
+  padding: 9px 12px;
+  border: 1px solid #d8dfd1;
+  border-radius: 8px;
+  background: #fff;
+  color: #263429;
+}
+.account-switcher small {
+  color: #76806e;
+  font-size: 11px;
+}
+@media (max-width: 600px) {
+  .account-switcher select {
+    flex: 1;
+    min-width: 140px;
+  }
+}

@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "SLZB Spot Monitor",
-    "version": "0.4.0",
-    "description": "多用户只读现货监控：管理员配置绑定，每个登录用户只读取自己的账户。持久 Cookie 自动续期。"
+    "version": "0.5.0",
+    "description": "多用户现货监控：普通用户只读绑定账户；管理员可切换启用账户并维护手工成本。持久 Cookie 自动续期。"
   },
   "servers": [
     {
@@ -116,7 +116,18 @@
           "default": {
             "$ref": "#/components/responses/Error"
           }
-        }
+        },
+        "parameters": [
+          {
+            "name": "accountId",
+            "in": "query",
+            "required": false,
+            "description": "管理员可选择任一启用账户；普通用户始终使用绑定账户。",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
       }
     },
     "/api/holdings": {
@@ -151,7 +162,18 @@
           "default": {
             "$ref": "#/components/responses/Error"
           }
-        }
+        },
+        "parameters": [
+          {
+            "name": "accountId",
+            "in": "query",
+            "required": false,
+            "description": "管理员可选择任一启用账户；普通用户始终使用绑定账户。",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
       }
     },
     "/api/pnl": {
@@ -183,7 +205,18 @@
           "default": {
             "$ref": "#/components/responses/Error"
           }
-        }
+        },
+        "parameters": [
+          {
+            "name": "accountId",
+            "in": "query",
+            "required": false,
+            "description": "管理员可选择任一启用账户；普通用户始终使用绑定账户。",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
       }
     },
     "/api/trades": {
@@ -218,6 +251,15 @@
               "default": 100
             },
             "description": "Requires symbol"
+          },
+          {
+            "name": "accountId",
+            "in": "query",
+            "required": false,
+            "description": "管理员可选择任一启用账户；普通用户始终使用绑定账户。",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -289,7 +331,18 @@
           "default": {
             "$ref": "#/components/responses/Error"
           }
-        }
+        },
+        "parameters": [
+          {
+            "name": "accountId",
+            "in": "query",
+            "required": false,
+            "description": "管理员可选择任一启用账户；普通用户始终使用绑定账户。",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
       }
     },
     "/api/history": {
@@ -324,7 +377,18 @@
           "default": {
             "$ref": "#/components/responses/Error"
           }
-        }
+        },
+        "parameters": [
+          {
+            "name": "accountId",
+            "in": "query",
+            "required": false,
+            "description": "管理员可选择任一启用账户；普通用户始终使用绑定账户。",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
       }
     },
     "/api/connection": {
@@ -371,7 +435,18 @@
           "default": {
             "$ref": "#/components/responses/Error"
           }
-        }
+        },
+        "parameters": [
+          {
+            "name": "accountId",
+            "in": "query",
+            "required": false,
+            "description": "管理员可选择任一启用账户；普通用户始终使用绑定账户。",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
       }
     },
     "/api/sync": {
@@ -381,6 +456,15 @@
         "parameters": [
           {
             "$ref": "#/components/parameters/Origin"
+          },
+          {
+            "name": "accountId",
+            "in": "query",
+            "required": false,
+            "description": "管理员可选择任一启用账户；普通用户始终使用绑定账户。",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -434,19 +518,34 @@
     },
     "/api/costs": {
       "get": {
-        "summary": "管理员读取绑定账户的手工成本",
+        "summary": "管理员读取选定账户的手工成本",
         "responses": {
           "200": {
             "description": "costs, revision, updatedAt, updatedBy, writable"
           },
           "403": {
             "description": "需要管理员角色"
+          },
+          "404": {
+            "description": "所选账户不存在或已停用"
           }
-        }
+        },
+        "parameters": [
+          {
+            "name": "accountId",
+            "in": "query",
+            "required": false,
+            "description": "管理员可选择任一启用账户；普通用户始终使用绑定账户。",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "需要管理员角色，按 accountId 选择启用账户。写入还需同源 Origin。成本完全手动维护。"
       },
       "put": {
         "summary": "管理员保存成本并追溯重算盈亏",
-        "description": "仅绑定账户，需要同源 Origin。成本不会自动推算。",
+        "description": "需要管理员角色，按 accountId 选择启用账户。写入还需同源 Origin。成本完全手动维护。",
         "requestBody": {
           "required": true,
           "content": {
@@ -488,8 +587,22 @@
           },
           "503": {
             "description": "云端缺少持久数据库"
+          },
+          "404": {
+            "description": "所选账户不存在或已停用"
           }
-        }
+        },
+        "parameters": [
+          {
+            "name": "accountId",
+            "in": "query",
+            "required": false,
+            "description": "管理员可选择任一启用账户；普通用户始终使用绑定账户。",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
       }
     }
   },

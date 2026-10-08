@@ -49,7 +49,7 @@ export function readSession(
     if (
       !user ||
       payload.rev !== revision(user) ||
-      !app.accounts.some((a) => a.id === user.accountId && a.enabled)
+      !app.accounts.some((a) => a.enabled && (user.role === "admin" || a.id === user.accountId))
     )
       return null;
     return { user, expiresAt: payload.exp };
@@ -71,7 +71,7 @@ export function authorize(request: Request) {
   return {
     app,
     user: session.user,
-    config: getAccountConfig(app, session.user.accountId),
+    config: getAccountConfig(app, defaultAccountId(app, session.user)),
     expiresAt: session.expiresAt,
   };
 }
@@ -110,5 +110,47 @@ export function checkOrigin(request: Request) {
 export function authorizeAdmin(request: Request) {
   const auth = authorize(request);
   if (auth.user.role !== "admin") throw new AppError("FORBIDDEN", "仅管理员可以维护成本。", 403);
-  return auth;
+  return selectAccount(request, auth);
+}
+
+function defaultAccountId(app: AppConfig, user: PortalUser) {
+  return (
+    app.accounts.find((a) => a.enabled && a.id === user.accountId)?.id ??
+    (user.role === "admin" ? app.accounts.find((a) => a.enabled)?.id : undefined) ??
+    user.accountId
+  );
+}
+function selectAccount(request: Request, auth: AuthContext): AuthContext {
+  const selected = new URL(request.url).searchParams.get("accountId");
+  // Viewer requests remain bound to their own account, regardless of client parameters.
+  if (auth.user.role !== "admin" || selected === null) return auth;
+  if (!auth.app.accounts.some((a) => a.id === selected && a.enabled))
+    throw new AppError("ACCOUNT_NOT_FOUND", "所选账户不存在或已停用。", 404);
+  return { ...auth, config: getAccountConfig(auth.app, selected) };
+}
+export function authorizeAccount(request: Request) {
+  return selectAccount(request, authorize(request));
+}
+export function sessionDetails(app: AppConfig, user: PortalUser) {
+  const accountId = defaultAccountId(app, user);
+  return {
+    authenticated: true,
+    demo: app.builtInDemo,
+    user: { username: user.username, displayName: user.displayName, role: user.role },
+    accountId,
+    accountLabel: getAccountConfig(app, accountId).ACCOUNT_LABEL,
+    ...(user.role === "admin"
+      ? {
+          accounts: app.accounts
+            .filter((a) => a.enabled)
+            .map((a) => ({
+              id: a.id,
+              label: a.label,
+              viewers: app.users
+                .filter((u) => u.enabled && u.role === "viewer" && u.accountId === a.id)
+                .map((u) => u.displayName),
+            })),
+        }
+      : {}),
+  };
 }

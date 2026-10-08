@@ -17,10 +17,10 @@ flowchart LR
 - `config.ts` 从服务端私密 JSON/文件加载，解析单个已授权账户为旧适配器所需 Config；自建配置不继承内置 demo 用户。
 - `scripts/manage.mjs` 仅管理员本地执行。交互式隐藏输入密钥与密码，原子写入私密文件，生成 Vercel 导出。密码使用共享 `scripts/password.mjs` 的加盐 scrypt。
 - `auth.ts` 签名会话包括用户名、有效期和用户权限版本摘要。每次校验当前用户 enabled、account enabled、密码哈希、绑定及 sessionVersion。成功请求在一天后续期至一年。
-- API 路由只把 `authorize(request).config` 交给聚合服务，从不根据查询参数/客户端 Header 选择账户。全局 API Bearer 已移除；Cron 使用独立管理员密钥。
+- 账户数据路由通过 `authorizeAccount(request)` 选择账户：仅管理员可使用 accountId 访问其他启用账户；普通用户忽略客户端 accountId，固定使用绑定账户。全局 API Bearer 已移除；Cron 使用独立管理员密钥。
 - `service.ts` 按账户 ID / API Key / Secret / 环境 / 交易对建立缓存键；每个账户独立 single-flight Promise，避免并发请求共享错误的结果或采集时间。
 - `storage.ts` 按账户 ID / 环境 / API Key 指纹隔离数据库 scope；同五分钟桶只让较新采集覆盖旧值。换 Key 开新 scope。
-- 前端仅对管理员开放绑定账户的成本编辑，登录/退出清空旧数据。请求代数使退出或切换用户前未完成的请求不能写入新会话页面；BroadcastChannel 同步同浏览器其他标签页的登录状态。
+- 前端仅对管理员开放账户选择及所选账户的成本编辑，登录/退出清空旧数据。请求代数使退出或切换用户前未完成的请求不能写入新会话页面；BroadcastChannel 同步同浏览器其他标签页的登录状态。
 
 数据库用于净值历史和按账户隔离的自动成交账本，用户及凭证由管理员私密配置管理，因此不接数据库也可以启用多用户。Vercel 环境变量变更需重新部署；本地文件每请求读取。初版限定 20 账户 / 100 用户，适合小范围朋友查看，不是自助 SaaS。
 
@@ -28,4 +28,4 @@ HTTP Cookie 有一年滚动有效期，不是不可撤销的永久凭证。退�
 
 Cron 只采余额和行情，使用共享查询截止时间，单账户失败会明确报告。默认免费每日采集与页面 60 秒刷新独立。后台 Cron 不推进成交回溯；回溯由页面请求触发。binance.ts 自动发现目录并增量分页，manual-pnl.ts 只使用管理员固定成本计算卖出盈亏，自动成本推算已删除。ledger-store.ts 本地原子私密文件保存、云端 Neon JSONB 保存；Neon 用 revision 条件更新防止并发实例覆盖更新进度。跨币/第三币费用/转账差异保守返回未知。
 
-`cost-store.ts` 保存管理员成本，读取优先级为持久记录→配置 costs（演示账户有固定初值）。本地使用独占写锁与原子 rename，Neon 使用 revision 条件更新；保存最近 100 次审计。无法读取成本时不回退到自动估算。角色由 CLI 管理，加入会话版本摘要，服务端 require-admin 且只使用绑定账户。
+`cost-store.ts` 保存管理员成本，读取优先级为持久记录→配置 costs（演示账户有固定初值）。本地使用独占写锁与原子 rename，Neon 使用 revision 条件更新；保存最近 100 次审计。无法读取成本时不回退到自动估算。角色由 CLI 管理，加入会话版本摘要，服务端 require-admin 后验证所选账户存在且启用；普通用户固定使用绑定账户。

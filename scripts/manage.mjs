@@ -241,11 +241,11 @@ async function main() {
             .map((a) => ({ name: `${a.label} (${a.id})`, value: a.id })),
         });
         const role = await select({
-          message: "用户角色（仅作用于绑定账户）",
+          message: "用户角色",
           default: "viewer",
           choices: [
             { name: "只读查看（朋友使用）", value: "viewer" },
-            { name: "管理员（可以修改绑定账户成本）", value: "admin" },
+            { name: "管理员（可管理所有账户成本）", value: "admin" },
           ],
         });
         next.users.push(
@@ -276,7 +276,7 @@ async function main() {
             default: user.role,
             choices: [
               { name: "只读查看", value: "viewer" },
-              { name: "管理员：可修改绑定账户成本", value: "admin" },
+              { name: "管理员：可管理所有账户成本", value: "admin" },
             ],
           });
         if (action === "password") user.passwordHash = await newPassword();

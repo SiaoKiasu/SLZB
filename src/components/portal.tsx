@@ -108,6 +108,9 @@ export function Portal() {
     displayName: string;
     role: "admin" | "viewer";
   } | null>(null);
+  const [accounts, setAccounts] = useState<{ id: string; label: string; viewers: string[] }[]>([]);
+  const [selectedAccount, setSelectedAccount] = useState("");
+  const [costPending, setCostPending] = useState(false);
   const [costEditorOpen, setCostEditorOpen] = useState(false);
   const [demoLogin, setDemoLogin] = useState(false);
   const [password, setPassword] = useState("");
@@ -130,6 +133,8 @@ export function Portal() {
     loading.current = false;
     setData(null);
     setViewer(null);
+    setAccounts([]);
+    setSelectedAccount("");
     setCostEditorOpen(false);
     setSession("loading");
     setError("");
@@ -137,6 +142,8 @@ export function Portal() {
       const s = await api("/api/session");
       if (generation.current !== current) return;
       setViewer(s.user);
+      setAccounts(s.accounts ?? []);
+      setSelectedAccount(s.accountId);
       setDemoLogin(s.demo);
       setSession("ready");
     } catch (e) {
@@ -157,7 +164,9 @@ export function Portal() {
     const current = generation.current;
     setBusy(true);
     try {
-      const next = await api("/api/sync", { method: "POST" });
+      const next = await api(`/api/sync?accountId=${encodeURIComponent(selectedAccount)}`, {
+        method: "POST",
+      });
       if (generation.current !== current) return;
       setData(next);
       setError("");
@@ -175,7 +184,7 @@ export function Portal() {
         setBusy(false);
       }
     }
-  }, []);
+  }, [selectedAccount]);
   useEffect(() => {
     void checkSession();
   }, [checkSession]);
@@ -217,6 +226,8 @@ export function Portal() {
       loading.current = false;
       setPassword("");
       setViewer(result.user);
+      setAccounts(result.accounts ?? []);
+      setSelectedAccount(result.accountId);
       authChannel.current?.postMessage("changed");
       setData(null);
       setSession("ready");
@@ -235,6 +246,8 @@ export function Portal() {
       authChannel.current?.postMessage("changed");
       setData(null);
       setViewer(null);
+      setAccounts([]);
+      setSelectedAccount("");
       setCostEditorOpen(false);
       setSession("login");
       setError("");
@@ -552,6 +565,35 @@ export function Portal() {
               </button>
             </div>
           </div>
+          {viewer?.role === "admin" && (
+            <div className="account-switcher">
+              <label htmlFor="managed-account">管理账户</label>
+              <select
+                id="managed-account"
+                value={selectedAccount}
+                disabled={costPending}
+                onChange={(e) => {
+                  generation.current++;
+                  loading.current = false;
+                  setData(null);
+                  setError("");
+                  setBusy(true);
+                  setSearch("");
+                  setPage(1);
+                  setSide("ALL");
+                  setSelectedAccount(e.target.value);
+                }}
+              >
+                {accounts.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.label}
+                    {a.viewers.length ? ` · ${a.viewers.join("、")}` : ""}
+                  </option>
+                ))}
+              </select>
+              {costPending && <small>保存或重新加载成本后可切换账户</small>}
+            </div>
+          )}
           {error && (
             <div className="error" role="alert">
               {error}
@@ -560,13 +602,19 @@ export function Portal() {
           )}
           {viewer?.role === "admin" && costEditorOpen && (
             <CostEditor
+              key={selectedAccount}
+              accountId={selectedAccount}
+              accountLabel={accounts.find((a) => a.id === selectedAccount)?.label ?? ""}
+              onPendingChange={setCostPending}
               holdings={data?.holdings ?? []}
               trades={data?.trades ?? []}
               onSaved={async () => {
                 const current = ++generation.current;
                 loading.current = false;
                 try {
-                  const next = await api("/api/dashboard");
+                  const next = await api(
+                    `/api/dashboard?accountId=${encodeURIComponent(selectedAccount)}`,
+                  );
                   if (current === generation.current) {
                     setData(next);
                     setError("");

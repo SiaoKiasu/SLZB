@@ -29,7 +29,7 @@ Base URL 为本地 `http://localhost:3000` 或部署域名。所有账户接口�
 | POST   | `/api/sync`                                      | 当前账户同步并尝试保存快照                     |
 | GET    | `/api/cron`                                      | 管理员 Cron Bearer 鉴权，采集所有启用真实账户  |
 
-除健康检查、登录和独立 Cron 外，全部接口都验证用户 Cookie。POST/DELETE 必须携带同源 Origin；没有通过网页更改用户、角色、密码、绑定或 API 密钥的接口；管理员可以修改绑定账户的成本。
+除健康检查、登录和独立 Cron 外，全部接口都验证用户 Cookie。POST/DELETE 必须携带同源 Origin；没有通过网页更改用户、角色、密码、绑定或 API 密钥的接口；管理员可以选择并修改任何启用账户的成本。
 
 聚合 `/api/dashboard` 和 `/api/sync` 直接返回 Dashboard。其他账户数据端点通常返回 `{ data, updatedAt, warnings }`。会话成功返回 `{ authenticated: true, demo, user: { username, displayName, role }, accountLabel }`。只有未配置自建用户的内置 Demo 才返回 `demo: true` 以显示演示登录提示。
 
@@ -66,9 +66,9 @@ Base URL 为本地 `http://localhost:3000` 或部署域名。所有账户接口�
 
 ## 管理员成本接口
 
-- `GET /api/costs`：仅 `role=admin`，返回当前绑定账户 `{ costs, revision, updatedAt, updatedBy, writable }`。普通用户返回 403。
+- `GET /api/costs`：仅 `role=admin`，返回选定账户 `{ costs, revision, updatedAt, updatedBy, writable }`。普通用户返回 403。
 - `PUT /api/costs`：需要同源 Origin 和管理员会话。正文 `{ "revision": null, "costs": { "BTC": "58000", "BNB": "500" } }`。首次 revision 为 null，后续提交 GET 获得的 UUID。完整替换成本记录；移除币种代表未设置，显式 `"0"` 表示零成本。USDT 只能为 1 或省略。限 500 个币，金额最多 20 位整数及 16 位小数，不能负数。
-- 管理员仅可写绑定账户。忽略 URL 的 accountId，正文额外字段被拒绝。冲突 409；Vercel 未配置 DATABASE_URL 时写入 503；保存成功只返回成本元数据，不暴露密钥或配置文件。审计存储于服务端。
+- 管理员通过 URL 的 accountId 选择任一启用账户，不传则使用默认账户。无效/停用账户返回 404，绝不回退写入其他账户。普通用户不能调用成本管理接口，正文额外字段被拒绝。冲突 409；Vercel 未配置 DATABASE_URL 时写入 503；保存成功只返回成本元数据，不暴露密钥或配置文件。审计存储于服务端。
 - 修改会追溯重算历史卖出；成本不会被新成交自动调整。新成本每次聚合请求从持久存储读取，不受交易所 30 秒缓存影响。
 
 `totalPnl/baseline/baselineAt/netFlows/stablecoinValue` 保留兼容旧客户端；界面不再把 totalPnl 当作已实现盈亏。新配置不需要旧 performance 字段。`tradeCount` 是全部已同步成交数，列表最多返回 1,000 笔；单交易对 API 可继续分页。
@@ -84,3 +84,9 @@ Base URL 为本地 `http://localhost:3000` 或部署域名。所有账户接口�
 400 参数无效，401 未登录或账号密码错误，403 来源校验失败，404 资源不存在，429 请求限流，502 交易所异常，503 服务配置或采集失败。密码错误、用户不存在、停用时都返回相同登录错误，避免泄露用户存在性。
 
 同一账户的聚合查询在同一实例合并并缓存 30 秒，不同账户独立。服务器每次都先验证会话及最新账户绑定，再访问缓存。实例间没有共享缓存，账户之间绝不共享客户端数据。单交易对分页不缓存。没有认证信息、配置文件内容、密码哈希或交易所密钥的读写接口。
+
+## 管理员账户切换
+
+GET/POST `/api/session` 均返回默认 `accountId`。管理员额外获得 `accounts: [{ id, label, viewers }]`（仅启用账户，viewers 是查看用户显示名），无密钥；普通用户不返回该列表。管理员可在 `/api/dashboard`、`/api/sync`、各账户数据端点及 `/api/costs` 加 `?accountId=...`。会话保持管理员身份，审计仍记录真实修改人。管理员默认账户被停用时，默认打开第一个启用账户。
+
+前端切换会清空旧持仓并丢弃旧请求响应，成本编辑器随账户重新创建。存在未保存成本或正在保存时禁止切换，保存或重新加载后恢复。

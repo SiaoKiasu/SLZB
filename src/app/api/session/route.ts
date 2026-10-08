@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import {
   authorize,
+  sessionDetails,
   authenticatedJson,
   checkOrigin,
   COOKIE_NAME,
@@ -16,19 +17,7 @@ const attempts = new Map<string, { count: number; until: number }>();
 export async function GET(request: Request) {
   try {
     const auth = authorize(request);
-    return authenticatedJson(
-      {
-        authenticated: true,
-        demo: auth.app.builtInDemo,
-        user: {
-          username: auth.user.username,
-          displayName: auth.user.displayName,
-          role: auth.user.role,
-        },
-        accountLabel: auth.config.ACCOUNT_LABEL,
-      },
-      auth,
-    );
+    return authenticatedJson(sessionDetails(auth.app, auth.user), auth);
   } catch (e) {
     if (e instanceof AppError && e.status === 401)
       return json(
@@ -79,15 +68,12 @@ export async function POST(request: Request) {
     if (
       !user?.enabled ||
       !verified ||
-      !app.accounts.some((a) => a.id === user.accountId && a.enabled)
+      !app.accounts.some((a) => a.enabled && (user.role === "admin" || a.id === user.accountId))
     )
       throw new AppError("INVALID_CREDENTIALS", "用户名或密码不正确。", 401);
     attempts.delete(key);
     const response = NextResponse.json(
-      {
-        ok: true,
-        user: { username: user.username, displayName: user.displayName, role: user.role },
-      },
+      { ok: true, ...sessionDetails(app, user) },
       { headers: { "Cache-Control": "no-store" } },
     );
     setSessionCookie(response, app, user);

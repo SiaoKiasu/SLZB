@@ -4,8 +4,8 @@ import type { Holding, Trade } from "@/lib/types";
 import type { CostSettings } from "@/lib/cost-schema";
 
 type Settings = CostSettings & { writable: boolean };
-async function request(init?: RequestInit): Promise<Settings> {
-  const response = await fetch("/api/costs", {
+async function request(accountId: string, init?: RequestInit): Promise<Settings> {
+  const response = await fetch(`/api/costs?accountId=${encodeURIComponent(accountId)}`, {
     ...init,
     cache: "no-store",
     signal: AbortSignal.timeout(20000),
@@ -15,10 +15,16 @@ async function request(init?: RequestInit): Promise<Settings> {
   return result;
 }
 export function CostEditor({
+  accountId,
+  accountLabel,
+  onPendingChange,
   holdings,
   trades,
   onSaved,
 }: {
+  accountId: string;
+  accountLabel: string;
+  onPendingChange: (pending: boolean) => void;
   holdings: Holding[];
   trades: Trade[];
   onSaved: () => Promise<void>;
@@ -37,7 +43,7 @@ export function CostEditor({
     setError("");
     setNotice("");
     try {
-      const result = await request();
+      const result = await request(accountId);
       if (!mounted.current || current !== sequence.current) return;
       setSettings(result);
       setDraft(result.costs);
@@ -55,6 +61,17 @@ export function CostEditor({
       sequence.current++;
     };
   }, []);
+  useEffect(() => {
+    const normalize = (values: Record<string, string>) =>
+      JSON.stringify(
+        Object.entries(values)
+          .filter(([a, v]) => a !== "USDT" && v.trim() !== "")
+          .map(([a, v]) => [a, v.trim()])
+          .sort(([a], [b]) => a.localeCompare(b)),
+      );
+    onPendingChange(busy || Boolean(settings && normalize(draft) !== normalize(settings.costs)));
+  }, [busy, draft, settings, onPendingChange]);
+  useEffect(() => () => onPendingChange(false), [onPendingChange]);
   const assets = [
     ...new Set([
       ...Object.keys(draft),
@@ -80,7 +97,7 @@ export function CostEditor({
           .filter(([a, v]) => a !== "USDT" && v.trim() !== "")
           .map(([a, v]) => [a, v.trim()]),
       );
-      const result = await request({
+      const result = await request(accountId, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ costs, revision: settings.revision }),
@@ -103,7 +120,7 @@ export function CostEditor({
       <div className="panel-heading">
         <div>
           <h2>
-            成本管理 <span className="subtle-tag">仅管理员</span>
+            成本管理 · {accountLabel} <span className="subtle-tag">仅管理员</span>
           </h2>
         </div>
       </div>

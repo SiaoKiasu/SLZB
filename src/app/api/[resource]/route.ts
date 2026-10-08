@@ -1,4 +1,4 @@
-import { authorize, authenticatedJson } from "@/lib/auth";
+import { authorizeAccount, authenticatedJson } from "@/lib/auth";
 import { dashboard } from "@/lib/service";
 import { failure } from "@/lib/http";
 import { AppError } from "@/lib/errors";
@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 export async function GET(request: Request, context: { params: Promise<{ resource: string }> }) {
   try {
-    const auth = authorize(request);
+    const auth = authorizeAccount(request);
     const c = auth.config;
     const respond = (data: unknown) => authenticatedJson(data, auth);
     const { resource } = await context.params;

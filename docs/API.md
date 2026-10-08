@@ -62,7 +62,7 @@ Base URL 为本地 `http://localhost:3000` 或部署域名。所有账户接口�
 
 `connection.tradesComplete` 表示当前已发现交易对都完成首次分页回溯，且本轮无成交查询失败；不是所有历史操作均已覆盖的保证。`connection.historySync` 返回 `{ scanned, total, oldestCheck }`，时间为毫秒或 null；`connection.symbols` 为已发现有成交的交易对。不同交易对轮转增量查询，最早检查时间表达查询范围的时效性。`ordersComplete=false` 时空列表不是“没有挂单”。
 
-`summary` 新增 `realizedPnl`、`principal`（可为 null），`cash`、`cashFree`、`cashLocked`（十进制字符串，USDT）。`cash` 包含冻结 USDT，不含其他稳定币。`equity` 为现货钱包估值；`unrealizedPnl` 必须全部非 USDT 持仓成本可知，否则 null。金额 null 表示未知；成本完全由管理员输入，不从历史推算。持仓浮盈亏立即按管理员成本计算，不等待历史扫描。已实现盈亏按全部已同步 USDT 卖出量乘当前手工成本扣除，并将卖出费用按同一成本折算；缺币种/手续费币成本、扫描未完或存在非 USDT 卖出时为 null。下架未发现交易对、闪兑和资金流水不在范围内。
+`summary` 新增 `realizedPnl`、`principal`（可为 null），`cash`、`cashFree`、`cashLocked`（十进制字符串，USDT）。`cash` 包含冻结 USDT，不含其他稳定币。`equity` 优先使用 Binance 钱包接口（`quoteAsset=USDT`）返回的 Spot `balance`，失败或测试网才本地估算；`equitySource` 为 `exchange` / `calculated`，`equityComplete` 表示总额是否完整。官方估值不依赖本地逐币行情完整性，实时与 Cron 快照都使用同一规则。`unrealizedPnl` 仅汇总非稳定币；其成本或行情缺失时为 null，稳定币持仓浮盈为 null。金额 null 表示未知；成本完全由管理员输入，不从历史推算。持仓浮盈亏立即按管理员成本计算，不等待历史扫描。已实现盈亏按全部已同步 USDT 卖出量乘当前手工成本扣除，并将卖出费用按同一成本折算；缺币种/手续费币成本、扫描未完或存在非 USDT 卖出时为 null。下架未发现交易对、闪兑和资金流水不在范围内。
 
 ## 管理员成本接口
 

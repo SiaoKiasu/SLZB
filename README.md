@@ -77,7 +77,7 @@ npm run setup
 
 管理员登录后先在「管理账户」选择朋友账户，再点击「成本管理」，填写各币平均单位成本（USDT / 枚）并保存。同一绑定账户的所有用户共享这套成本。0 表示明确零成本，留空清除设置，USDT 基准固定为 1。后续买入不会改变手工成本。
 
-- **Equity**：现货钱包全部余额（可用 + 冻结）的 USDT 估值，不受手工成本影响。
+- **Equity**：优先读取 `GET /sapi/v1/asset/wallet/balance?quoteAsset=USDT` 返回的 `walletName=Spot` 的 `balance`，不汇总合约、资金或其他钱包。接口不可用或使用测试网时，才退回现货余额（可用 + 冻结）× 行情估算；页面显示「交易所返回」或「本地估算」。手工成本不影响 Equity，净值快照也使用同一取值规则。
 - **未实现盈亏**：非稳定币持仓数量 ×（最新价格 − 管理员单位成本）。手工成本保存后即可计算，不等待成交回溯；缺任一非稳定币持仓成本或行情时总额为未知。USDT、USDC、FDUSD、DAI、TUSD、USDP 的持仓浮盈显示「—」，不计入未实现盈亏汇总，但仍按实际行情计入总资产估值。
 - **已实现盈亏**：已同步 USDT 卖出所得 − 卖出数量 × 管理员单位成本 − 卖出手续费折算额。手续费币也使用管理员成本（USDT=1）；买入费用应由管理员包含在单位成本内。修改成本会追溯重算历史卖出，属于管理员指定口径，不是交易所官方盈亏。
 - **现金**：仅 USDT 可用 + 冻结余额，并分别展示。不受成本设置影响。
@@ -89,9 +89,9 @@ npm run setup
 
 成本按账户、环境、API Key 指纹隔离；更换 Key 后需重新登记或迁移成本。服务端校验管理员角色及 Origin，只有管理员可通过 accountId 选择其他启用账户；普通用户始终限于自己绑定账户，无法调用成本管理接口。保存要求 revision 防止覆盖别人刚保存的内容，并保留最近 100 次修改审计。旧 `costs` 字段可作为尚未网页保存时的手工初值，旧 `performance` 仅保留兼容 API 字段。
 
-报价为 USDT；其他稳定币按市场价格估值。未知行情资产保留在列表、不计入小计，并暂停净值快照。24h 涨跌和净值曲线不等同于资金流调整后的收益率。
+报价为 USDT；其他稳定币按市场价格估值。未知行情资产保留在列表、不计入持仓明细小计；有官方 Equity 时仍可记录净值，只有本地估值不完整时才暂停快照。明细行情与官方估值的时间和口径可能不同，明细合计不保证与 Equity 完全一致；资产占比按已估值持仓明细合计计算。历史快照不会追溯改写。24h 涨跌和净值曲线不等同于资金流调整后的收益率。
 
-接口依据：[Binance 账户与成交文档](https://developers.binance.com/en/docs/catalog/core-trading-spot-trading/api/rest-api/account)。
+接口依据：[Binance 账户与成交文档](https://developers.binance.com/en/docs/catalog/core-trading-spot-trading/api/rest-api/account)、[钱包估值文档](https://developers.binance.com/en/docs/catalog/core-trading-wallet/api/rest-api/asset#query-user-wallet-balance)。现货公开账户/钱包接口没有对应的未实现盈亏字段，按管理员成本计算；合约或统一保证金账户的盈亏字段不用于本项目现货口径。
 
 ## 开发与接口
 

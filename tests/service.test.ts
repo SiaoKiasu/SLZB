@@ -43,6 +43,33 @@ const base = {
   ordersComplete: true,
 };
 describe("snapshot and valuation integrity", () => {
+  it.each(["456.12345678", "0"])(
+    "prefers exchange equity %s and saves it even with unpriced holdings",
+    async (spotEquity) => {
+      const c = config(`official-equity-${spotEquity}`);
+      mocks.load.mockResolvedValue({
+        ...base,
+        spotEquity,
+        balances: [
+          { asset: "UNKNOWN", free: "1", locked: "0" },
+          { asset: "USDT", free: "100", locked: "2" },
+        ],
+      });
+      mocks.history.mockResolvedValue([]);
+      const d = await dashboard(c, true);
+      expect(d.summary).toMatchObject({
+        equity: spotEquity,
+        equitySource: "exchange",
+        equityComplete: true,
+        unpricedAssets: 1,
+        cash: "102",
+        unrealizedPnl: null,
+      });
+      expect(mocks.save).toHaveBeenCalledWith(c, expect.objectContaining({ equity: spotEquity }));
+      expect(d.summary.totalPnl).not.toBeNull();
+      expect(d.warnings.join(" ")).not.toContain("当前总额仅为已估值资产小计");
+    },
+  );
   it("uses manual costs immediately before history finishes and picks up edits without an upstream refresh", async () => {
     const c = config("manual-before-history-test");
     mocks.load.mockResolvedValue({
@@ -97,6 +124,8 @@ describe("snapshot and valuation integrity", () => {
     mocks.history.mockResolvedValue([]);
     const d = await dashboard(c, true);
     expect(d.summary.equity).toBe("100");
+    expect(d.summary.equitySource).toBe("calculated");
+    expect(d.summary.equityComplete).toBe(false);
     expect(d.summary.totalPnl).toBeNull();
     expect(d.summary.unpricedAssets).toBe(1);
     expect(mocks.save).not.toHaveBeenCalled();

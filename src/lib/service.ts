@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import type { Config } from "./config";
 import { BinanceClient } from "./binance";
 import { demoData, demoHistory } from "./demo";
-import { STABLECOINS, totalPnl, valueHoldings } from "./portfolio";
+import { STABLECOINS, totalPnl, valueHoldings, resolveEquity } from "./portfolio";
 import { readHistory, saveSnapshot } from "./storage";
 import type { Dashboard, ProviderData } from "./types";
 import { manualRealizedPnl } from "./manual-pnl";
@@ -81,7 +81,8 @@ export async function dashboard(c: Config, persist = false): Promise<Dashboard> 
   const holdings = valueHoldings(data.balances, data.tickers, { ...costs, USDT: "1" });
   const sum = (values: (string | null)[]) =>
     values.reduce<Decimal>((a, v) => a.plus(v ?? 0), new Decimal(0)).toString();
-  const equity = sum(holdings.map((h) => h.value));
+  const valuation = resolveEquity(holdings, data.spotEquity);
+  const { equity, equityComplete } = valuation;
   const unpriced = holdings.filter((h) => h.value === null).length;
   const baseline = demo ? "100000" : c.PERFORMANCE_BASELINE_USDT;
   const netFlows = demo ? "0" : c.PERFORMANCE_NET_FLOWS_USDT;
@@ -93,8 +94,8 @@ export async function dashboard(c: Config, persist = false): Promise<Dashboard> 
   let saved = false;
   if (!demo && c.DATABASE_URL) {
     try {
-      // Do not record misleading total equity when even one held asset is unpriced.
-      if (persist && unpriced === 0) {
+      // Exchange equity remains usable even when individual ticker valuations are missing.
+      if (persist && equityComplete) {
         await saveSnapshot(c, { time, equity });
         saved = true;
       }
@@ -105,7 +106,11 @@ export async function dashboard(c: Config, persist = false): Promise<Dashboard> 
   }
   if (!demo && !c.DATABASE_URL) warnings.push("历史净值尚未启用，实时账户数据可正常查看。");
   if (unpriced)
-    warnings.push(`${unpriced} 种资产缺少可用行情，当前总额仅为已估值资产小计，累计盈亏暂停计算。`);
+    warnings.push(
+      equityComplete
+        ? `${unpriced} 种资产缺少可用行情，持仓明细估值不完整；总资产使用交易所现货钱包估值。`
+        : `${unpriced} 种资产缺少可用行情，当前总额仅为已估值资产小计，累计盈亏暂停计算。`,
+    );
   const missingCosts = nonStableHoldings.filter((h) => h.averageCost === null).map((h) => h.asset);
   if (costStorageFailed)
     warnings.push("管理员成本暂时无法读取，成本相关盈亏暂停计算，请稍后重试。");
@@ -136,7 +141,7 @@ export async function dashboard(c: Config, persist = false): Promise<Dashboard> 
     orders: data.orders,
     history,
     summary: {
-      equity,
+      ...valuation,
       pricedAssets: holdings.length - unpriced,
       unpricedAssets: unpriced,
       unrealizedPnl:
@@ -156,7 +161,7 @@ export async function dashboard(c: Config, persist = false): Promise<Dashboard> 
       cashFree: cash?.free ?? "0",
       cashLocked: cash?.locked ?? "0",
       costCoverage: costed.length,
-      totalPnl: totalPnl(equity, baseline, netFlows, unpriced),
+      totalPnl: totalPnl(equity, baseline, netFlows, equityComplete ? 0 : unpriced),
       baseline: baseline ?? null,
       baselineAt: demo
         ? new Date(Date.now() - 7 * 86400000).toISOString()

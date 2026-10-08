@@ -45,6 +45,7 @@ export type MarketLedger = {
 export type TradeLedger = { version: 1; markets: Record<string, MarketLedger> };
 export type HistorySync = { scanned: number; total: number; oldestCheck: number | null };
 export type ProviderData = {
+  spotEquity?: string | null;
   ledger?: TradeLedger;
   historySync?: HistorySync;
 
@@ -67,6 +68,8 @@ export type Dashboard = {
   history: Snapshot[];
   summary: {
     equity: string;
+    equitySource: "exchange" | "calculated";
+    equityComplete: boolean;
     pricedAssets: number;
     unpricedAssets: number;
     unrealizedPnl: string | null;

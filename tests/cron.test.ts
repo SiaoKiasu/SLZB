@@ -1,11 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-const mocks = vi.hoisted(() => ({ save: vi.fn() }));
+const mocks = vi.hoisted(() => ({ save: vi.fn(), equities: new Map<string, string>() }));
 vi.mock("@/lib/storage", () => ({ saveSnapshot: mocks.save }));
 vi.mock("@/lib/binance", () => ({
   BinanceClient: class {
     constructor(private config: { ACCOUNT_ID: string }) {}
     async loadBalances() {
       return {
+        spotEquity: mocks.equities.get(this.config.ACCOUNT_ID),
         balances: [
           {
             asset: "USDT",
@@ -23,6 +24,7 @@ import { configure, fixture } from "./helpers";
 afterEach(() => {
   vi.unstubAllEnvs();
   vi.resetAllMocks();
+  mocks.equities.clear();
 });
 function cronRequest(query = "") {
   configure(fixture("binance"));
@@ -39,6 +41,16 @@ describe("multi-account snapshots", () => {
     expect(mocks.save.mock.calls.map(([c, point]) => [c.ACCOUNT_ID, point.equity]).sort()).toEqual([
       ["alice-account", "101"],
       ["bob-account", "202"],
+    ]);
+  });
+  it("uses each account exchange equity for scheduled snapshots, including zero", async () => {
+    mocks.equities.set("alice-account", "123.456");
+    mocks.equities.set("bob-account", "0");
+    const r = await GET(cronRequest());
+    expect(r.status).toBe(200);
+    expect(mocks.save.mock.calls.map(([c, point]) => [c.ACCOUNT_ID, point.equity]).sort()).toEqual([
+      ["alice-account", "123.456"],
+      ["bob-account", "0"],
     ]);
   });
   it("supports admin-only account filtering", async () => {

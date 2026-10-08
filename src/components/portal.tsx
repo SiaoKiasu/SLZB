@@ -657,7 +657,7 @@ export function Portal() {
                 <div className="stats">
                   <div className="stat featured">
                     <div className="stat-label">
-                      {data.summary.unpricedAssets ? "已估值资产小计" : "总资产估值 · Equity"}
+                      {data.summary.equityComplete ? "总资产估值 · Equity" : "已估值资产小计"}
                       <Wallet size={17} />
                     </div>
                     <div className="stat-value">
@@ -666,7 +666,12 @@ export function Portal() {
                     </div>
                     <div className="stat-note">
                       <span className="live-dot" />
-                      {data.summary.pricedAssets} 种已估值资产 · 现货钱包
+                      {data.source === "demo"
+                        ? "模拟估值"
+                        : data.summary.equitySource === "exchange"
+                          ? "交易所返回"
+                          : "本地估算"}{" "}
+                      · 现货钱包
                     </div>
                   </div>
                   <div className="stat">

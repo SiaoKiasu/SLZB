@@ -3,6 +3,16 @@ import type { Balance, Holding, Ticker } from "./types";
 Decimal.set({ precision: 36 });
 import { STABLECOINS } from "./assets";
 export { STABLECOINS } from "./assets";
+export function resolveEquity(holdings: Holding[], spotEquity?: string | null) {
+  const exchange = spotEquity !== undefined && spotEquity !== null;
+  return {
+    equity: exchange
+      ? spotEquity
+      : holdings.reduce((sum, h) => sum.plus(h.value ?? 0), new Decimal(0)).toString(),
+    equitySource: exchange ? ("exchange" as const) : ("calculated" as const),
+    equityComplete: exchange || holdings.every((h) => h.value !== null),
+  };
+}
 export function valueHoldings(
   balances: Balance[],
   tickers: Ticker[],

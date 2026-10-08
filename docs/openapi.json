@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "SLZB Spot Monitor",
-    "version": "0.5.1",
+    "version": "0.5.2",
     "description": "多用户现货监控：普通用户只读绑定账户；管理员可切换启用账户并维护手工成本。持久 Cookie 自动续期。"
   },
   "servers": [
@@ -790,7 +790,8 @@
         "type": "object",
         "properties": {
           "equity": {
-            "$ref": "#/components/schemas/Amount"
+            "$ref": "#/components/schemas/Amount",
+            "description": "优先读取 Binance Spot 钱包 balance（quoteAsset=USDT）；失败或测试网才按余额与行情估算。不含其他钱包。"
           },
           "pricedAssets": {
             "type": "integer"
@@ -842,6 +843,15 @@
           "realizedPnlNote": {
             "type": "string",
             "description": "已实现盈亏口径或无法计算的具体原因（历史同步、缺少成本、非 USDT 卖出等）。"
+          },
+          "equitySource": {
+            "type": "string",
+            "enum": ["exchange", "calculated"],
+            "description": "总资产来自交易所接口或本地估算；演示数据为 calculated。"
+          },
+          "equityComplete": {
+            "type": "boolean",
+            "description": "有官方现货估值，或全部持仓本地估值完整时为 true。false 时 equity 仅为已估值资产小计，暂停快照。"
           }
         }
       },

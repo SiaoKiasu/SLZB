@@ -127,20 +127,44 @@ export class BinanceClient {
         balances: z.array(z.object({ asset: z.string(), free: decimal, locked: decimal })),
       })
       .parse(await this.request("/api/v3/account", { omitZeroBalances: "true" }, true));
-    const tickers = z
-      .array(
-        z.object({
-          symbol: z.string(),
-          lastPrice: decimal,
-          priceChangePercent: z.string().regex(/^-?\d+(\.\d+)?$/),
-        }),
-      )
-      .parse(await this.request("/api/v3/ticker/24hr"));
-    return { balances: account.balances, tickers };
+    const warnings: string[] = [];
+    const [prices, wallet] = await Promise.allSettled([
+      this.request("/api/v3/ticker/24hr"),
+      this.loadSpotEquity(),
+    ]);
+    const parsedPrices =
+      prices.status === "fulfilled"
+        ? z
+            .array(
+              z.object({
+                symbol: z.string(),
+                lastPrice: decimal,
+                priceChangePercent: z.string().regex(/^-?\d+(\.\d+)?$/),
+              }),
+            )
+            .safeParse(prices.value)
+        : null;
+    const tickers = parsedPrices?.success ? parsedPrices.data : [];
+    if (!parsedPrices?.success) warnings.push("行情暂时无法读取，持仓估值和未实现盈亏可能不完整。");
+    const spotEquity = wallet.status === "fulfilled" ? wallet.value : null;
+    if (wallet.status === "rejected")
+      warnings.push("交易所现货总资产暂时无法读取，当前按余额和行情估算。");
+    return { balances: account.balances, tickers, spotEquity, warnings };
+  }
+  async loadSpotEquity(): Promise<string | null> {
+    // SAPI wallet endpoints are mainnet-only; never send testnet keys to mainnet.
+    if (this.config.BINANCE_ENV === "testnet") return null;
+    const wallets = z
+      .array(z.object({ walletName: z.string() }).passthrough())
+      .parse(await this.request("/sapi/v1/asset/wallet/balance", { quoteAsset: "USDT" }, true));
+    // The endpoint also includes futures/funding wallets. Only Spot matches our holdings scope.
+    const spot = wallets.filter((wallet) => wallet.walletName === "Spot");
+    if (spot.length !== 1)
+      throw new AppError("EXCHANGE_RESPONSE", "现货钱包估值缺失或不明确。", 502);
+    return z.object({ balance: decimal, activate: z.literal(true) }).parse(spot[0]).balance;
   }
   async load(symbols: string[] = [], previous?: TradeLedger): Promise<ProviderData> {
-    const { balances, tickers } = await this.loadBalances();
-    const warnings: string[] = [];
+    const { balances, tickers, spotEquity, warnings } = await this.loadBalances();
     let orders: ProviderData["orders"] = [];
     let ordersComplete = true;
     let tradesComplete = true;
@@ -282,6 +306,7 @@ export class BinanceClient {
     return {
       balances,
       tickers,
+      spotEquity,
       trades: markets.flatMap((m) => m.trades).sort((a, b) => b.time - a.time),
       orders,
       warnings,

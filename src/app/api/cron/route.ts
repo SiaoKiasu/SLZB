@@ -1,8 +1,7 @@
-import Decimal from "decimal.js";
 import { constantEqual } from "@/lib/auth";
 import { getAppConfig, getAccountConfig } from "@/lib/config";
 import { BinanceClient } from "@/lib/binance";
-import { valueHoldings } from "@/lib/portfolio";
+import { valueHoldings, resolveEquity } from "@/lib/portfolio";
 import { saveSnapshot } from "@/lib/storage";
 import { json, failure } from "@/lib/http";
 import { AppError } from "@/lib/errors";
@@ -35,10 +34,8 @@ export async function GET(request: Request) {
             const c = getAccountConfig(app, account.id);
             const raw = await new BinanceClient(c, fetch, deadline).loadBalances();
             const holdings = valueHoldings(raw.balances, raw.tickers, c.costs);
-            if (holdings.some((h) => h.value === null)) throw new Error("incomplete valuation");
-            const equity = holdings
-              .reduce((sum, h) => sum.plus(h.value!), new Decimal(0))
-              .toString();
+            const { equity, equityComplete } = resolveEquity(holdings, raw.spotEquity);
+            if (!equityComplete) throw new Error("incomplete valuation");
             await saveSnapshot(c, { time: Date.now(), equity });
             results.push({ accountId: account.id, saved: true });
           } catch {

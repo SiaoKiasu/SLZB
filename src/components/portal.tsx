@@ -114,7 +114,6 @@ export function Portal() {
   const [selectedAccount, setSelectedAccount] = useState("");
   const [costPending, setCostPending] = useState(false);
   const [costEditorOpen, setCostEditorOpen] = useState(false);
-  const [demoLogin, setDemoLogin] = useState(false);
   const [password, setPassword] = useState("");
   const [data, setData] = useState<Dashboard | null>(null);
   const [error, setError] = useState("");
@@ -146,13 +145,11 @@ export function Portal() {
       setViewer(s.user);
       setAccounts(s.accounts ?? []);
       setSelectedAccount(s.accountId);
-      setDemoLogin(s.demo);
       setSession("ready");
     } catch (e) {
       if (generation.current !== current) return;
       const err = e as Error & { status?: number; demo?: boolean };
       if (err.status === 401) {
-        setDemoLogin(Boolean(err.demo));
         setSession("login");
       } else {
         setError(err.message);
@@ -279,14 +276,13 @@ export function Portal() {
           <div className="entrance-copy">
             <span className="eyebrow">PRIVATE CLIENT PORTAL</span>
             <h1>
-              清晰于当下。
+              研究驱动。
               <br />
-              从容于长远。
+              纪律投资。
             </h1>
             <div className="brand-rule" />
           </div>
           <LindenMark className="entrance-emblem" />
-          <span className="entrance-footer">PRIVATE ACCESS · READ ONLY</span>
         </div>
         <div className="entrance-form">
           <div className="login-card">
@@ -302,7 +298,6 @@ export function Portal() {
                   ? "账户服务暂不可用"
                   : "正在打开账户观察室"}
             </h2>
-            <p>使用管理员提供的用户名和密码登录。</p>
             {session === "login" && (
               <form onSubmit={login}>
                 <label htmlFor="username">用户名</label>
@@ -334,14 +329,6 @@ export function Portal() {
                 </button>
               </form>
             )}
-            {session === "login" && (
-              <p className="session-note">登录状态会自动保留，下次打开即可继续查看。</p>
-            )}
-            {session === "login" && demoLogin && (
-              <div className="demo-login">
-                演示账号 <strong>demo</strong> · 密码 <strong>demo123456</strong>
-              </div>
-            )}
             {session === "loading" && <LoaderCircle className="spin" />}
             {error && (
               <div className="error" role="alert">
@@ -350,17 +337,12 @@ export function Portal() {
             )}
             {session === "error" && (
               <>
-                <p className="help-text">请联系管理员检查账户服务，然后重新尝试登录。</p>
                 <button className="button" onClick={checkSession}>
                   <RefreshCw size={15} />
                   重新检查
                 </button>
               </>
             )}
-            <div className="login-note">
-              <ShieldCheck size={16} />
-              仅用于查看 · 账户由管理员统一管理
-            </div>
           </div>
         </div>
       </main>

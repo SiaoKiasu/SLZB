@@ -1257,7 +1257,7 @@ td small.inline {
   padding-top: 50px;
 }
 .entrance-copy h1 {
-  font-family: "Songti SC", "Noto Serif SC", var(--serif);
+  font-family: var(--font);
   font-size: clamp(30px, 3.1vw, 50px);
   line-height: 1.5;
   font-weight: 500;
@@ -1283,14 +1283,6 @@ td small.inline {
   flex: 1;
   background: linear-gradient(#acbd95, #d5e0c7);
   border-radius: 4px 4px 0 0;
-}
-.entrance-footer {
-  font-size: 8px;
-  letter-spacing: 2px;
-  color: #b3c0b3;
-  margin-top: 40px;
-  position: relative;
-  z-index: 1;
 }
 .entrance-form {
   flex: 1;
@@ -1321,11 +1313,6 @@ td small.inline {
   letter-spacing: -0.5px;
   margin: 11px 0;
 }
-.login-card > p {
-  font-size: 11px;
-  color: #98a28c;
-  line-height: 1.9;
-}
 .login-card form {
   margin-top: 30px;
 }
@@ -1350,21 +1337,8 @@ td small.inline {
 .login-card form .button {
   padding: 13px;
 }
-.login-note {
-  border-top: 1px solid #e7ebdf;
-  margin-top: 28px;
-  padding-top: 18px;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  font-size: 9px;
-  color: #9ba98c;
-}
 .login-card .error {
   margin: 20px 0 0;
-}
-.login-card .help-text {
-  margin: 16px 0;
 }
 .login-card > .spin {
   margin-top: 25px;
@@ -1830,25 +1804,6 @@ td small.inline {
     transition: none !important;
     scroll-behavior: auto !important;
   }
-}
-
-.session-note {
-  font-size: 10px;
-  color: #8b9980;
-  margin-top: 16px;
-  line-height: 1.8;
-}
-.demo-login {
-  background: #edf2e5;
-  border: 1px solid #e0e8d4;
-  border-radius: 6px;
-  margin-top: 16px;
-  padding: 11px;
-  font-size: 10px;
-  color: #6c815a;
-}
-.demo-login strong {
-  margin: 0 4px;
 }
 
 .capital-strip {

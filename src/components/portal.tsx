@@ -276,9 +276,9 @@ export function Portal() {
           <div className="entrance-copy">
             <span className="eyebrow">PRIVATE CLIENT PORTAL</span>
             <h1>
-              研究驱动。
+              Independent thinking.
               <br />
-              纪律投资。
+              Disciplined investing.
             </h1>
             <div className="brand-rule" />
           </div>

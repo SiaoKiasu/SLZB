@@ -3,7 +3,7 @@
   "info": {
     "title": "Linden Asset Management Spot Monitor",
     "version": "0.7.0",
-    "description": "多用户现货监控：普通用户只读绑定账户；管理员可切换启用账户并维护手工成本。持久 Cookie 自动续期。"
+    "description": "多用户现货监控与管理后台：环境变量固定管理员，网页管理用户、账户、API、本金及成本；普通用户仅只读绑定账户。"
   },
   "servers": [
     {
@@ -603,6 +603,279 @@
             }
           }
         ]
+      }
+    },
+    "/api/admin": {
+      "get": {
+        "operationId": "adminDirectory",
+        "summary": "固定管理员读取用户与账户目录",
+        "responses": {
+          "200": {
+            "description": "脱敏目录、固定管理员、revision 和最近操作记录；不返回任何 API 凭据或密码哈希。"
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "post": {
+        "operationId": "mutateAdminDirectory",
+        "summary": "固定管理员维护用户与账户配置",
+        "description": "同源 Origin、固定管理员会话及最新 revision 必需；创建用户必须含 password，网页用户永远为 viewer。",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Origin"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "action": {
+                        "const": "createAccount"
+                      },
+                      "revision": {
+                        "type": ["string", "null"],
+                        "format": "uuid"
+                      },
+                      "account": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "source": {
+                            "enum": ["binance", "demo"]
+                          },
+                          "environment": {
+                            "enum": ["mainnet", "testnet"]
+                          },
+                          "enabled": {
+                            "type": "boolean"
+                          },
+                          "principal": {
+                            "type": ["string", "null"]
+                          },
+                          "apiKey": {
+                            "type": "string",
+                            "writeOnly": true
+                          },
+                          "apiSecret": {
+                            "type": "string",
+                            "writeOnly": true
+                          }
+                        },
+                        "required": ["id", "label", "source", "environment", "enabled", "principal"]
+                      }
+                    },
+                    "required": ["action", "revision", "account"]
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "action": {
+                        "const": "updateAccount"
+                      },
+                      "revision": {
+                        "type": ["string", "null"],
+                        "format": "uuid"
+                      },
+                      "account": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "label": {
+                            "type": "string"
+                          },
+                          "source": {
+                            "enum": ["binance", "demo"]
+                          },
+                          "environment": {
+                            "enum": ["mainnet", "testnet"]
+                          },
+                          "enabled": {
+                            "type": "boolean"
+                          },
+                          "principal": {
+                            "type": ["string", "null"]
+                          },
+                          "apiKey": {
+                            "type": "string",
+                            "writeOnly": true
+                          },
+                          "apiSecret": {
+                            "type": "string",
+                            "writeOnly": true
+                          }
+                        },
+                        "required": ["id", "label", "source", "environment", "enabled", "principal"]
+                      }
+                    },
+                    "required": ["action", "revision", "account"]
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "action": {
+                        "const": "createUser"
+                      },
+                      "revision": {
+                        "type": ["string", "null"],
+                        "format": "uuid"
+                      },
+                      "user": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "username": {
+                            "type": "string"
+                          },
+                          "displayName": {
+                            "type": "string"
+                          },
+                          "accountId": {
+                            "type": "string"
+                          },
+                          "enabled": {
+                            "type": "boolean"
+                          },
+                          "password": {
+                            "type": "string",
+                            "minLength": 8,
+                            "maxLength": 256,
+                            "writeOnly": true
+                          }
+                        },
+                        "required": ["username", "displayName", "accountId", "enabled"]
+                      }
+                    },
+                    "required": ["action", "revision", "user"]
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "action": {
+                        "const": "updateUser"
+                      },
+                      "revision": {
+                        "type": ["string", "null"],
+                        "format": "uuid"
+                      },
+                      "user": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                          "username": {
+                            "type": "string"
+                          },
+                          "displayName": {
+                            "type": "string"
+                          },
+                          "accountId": {
+                            "type": "string"
+                          },
+                          "enabled": {
+                            "type": "boolean"
+                          },
+                          "password": {
+                            "type": "string",
+                            "minLength": 8,
+                            "maxLength": 256,
+                            "writeOnly": true
+                          }
+                        },
+                        "required": ["username", "displayName", "accountId", "enabled"]
+                      }
+                    },
+                    "required": ["action", "revision", "user"]
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "action": {
+                        "const": "revokeSessions"
+                      },
+                      "revision": {
+                        "type": ["string", "null"],
+                        "format": "uuid"
+                      },
+                      "username": {
+                        "type": "string"
+                      }
+                    },
+                    "required": ["action", "revision", "username"]
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "action": {
+                        "const": "deleteUser"
+                      },
+                      "revision": {
+                        "type": ["string", "null"],
+                        "format": "uuid"
+                      },
+                      "username": {
+                        "type": "string"
+                      }
+                    },
+                    "required": ["action", "revision", "username"]
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "脱敏目录、固定管理员、revision 和最近操作记录；不返回任何 API 凭据或密码哈希。"
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
       }
     }
   },

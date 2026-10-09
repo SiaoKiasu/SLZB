@@ -165,7 +165,7 @@ export async function dashboard(c: Config, persist = false): Promise<Dashboard> 
                 : []),
               ...(accounting.unsupported ? ["跨币成交待核算"] : []),
             ].join(" · ") || "尚无可核算的成交历史",
-      principal: demo ? "100000" : (c.PRINCIPAL_USDT ?? null),
+      principal: c.PRINCIPAL_USDT ?? (demo ? "100000" : null),
       cash: cash?.quantity ?? "0",
       cashFree: cash?.free ?? "0",
       cashLocked: cash?.locked ?? "0",

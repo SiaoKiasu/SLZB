@@ -18,3 +18,10 @@ CREATE TABLE IF NOT EXISTS slzb_cost_settings (
   revision TEXT NOT NULL,
   data JSONB NOT NULL
 );
+
+-- AES-256-GCM encrypted managed accounts/users; owner remains environment-only.
+CREATE TABLE IF NOT EXISTS linden_directory (
+  id TEXT PRIMARY KEY,
+  revision TEXT NOT NULL,
+  ciphertext TEXT NOT NULL
+);

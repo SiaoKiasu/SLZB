@@ -17,6 +17,7 @@ export type AppConfig = {
   databaseUrl: string;
   cronSecret: string;
   builtInDemo: boolean;
+  managed?: boolean;
 };
 export function getAppConfig(): AppConfig {
   // Private local config is read at runtime, never traced into deployment bundles.

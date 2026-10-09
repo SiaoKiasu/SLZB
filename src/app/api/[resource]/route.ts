@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 export async function GET(request: Request, context: { params: Promise<{ resource: string }> }) {
   try {
-    const auth = authorizeAccount(request);
+    const auth = await authorizeAccount(request);
     const c = auth.config;
     const respond = (data: unknown) => authenticatedJson(data, auth);
     const { resource } = await context.params;

@@ -1,7 +1,8 @@
 import "server-only";
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
-import { getAppConfig, getAccountConfig, type AppConfig } from "./config";
+import { getAccountConfig, type AppConfig } from "./config";
+import { loadAppConfig } from "./runtime-config";
 import type { PortalUser } from "./config-schema";
 import { AppError } from "./errors";
 export const COOKIE_NAME = "slzb_session";
@@ -49,7 +50,7 @@ export function readSession(
     if (
       !user ||
       payload.rev !== revision(user) ||
-      !app.accounts.some((a) => a.enabled && (user.role === "admin" || a.id === user.accountId))
+      (user.role !== "admin" && !app.accounts.some((a) => a.enabled && a.id === user.accountId))
     )
       return null;
     return { user, expiresAt: payload.exp };
@@ -57,8 +58,8 @@ export function readSession(
     return null;
   }
 }
-export function authorize(request: Request) {
-  const app = getAppConfig();
+export async function authorize(request: Request) {
+  const app = await loadAppConfig();
   const token =
     request.headers
       .get("cookie")
@@ -71,11 +72,10 @@ export function authorize(request: Request) {
   return {
     app,
     user: session.user,
-    config: getAccountConfig(app, defaultAccountId(app, session.user)),
     expiresAt: session.expiresAt,
   };
 }
-export type AuthContext = ReturnType<typeof authorize>;
+export type AuthContext = Awaited<ReturnType<typeof authorize>>;
 export function setSessionCookie(response: NextResponse, app: AppConfig, user: PortalUser) {
   response.cookies.set(COOKIE_NAME, createSession(app, user), {
     httpOnly: true,
@@ -107,9 +107,20 @@ export function checkOrigin(request: Request) {
   if (!allowed) throw new AppError("ORIGIN_REJECTED", "请求来源无效。", 403);
 }
 
-export function authorizeAdmin(request: Request) {
-  const auth = authorize(request);
-  if (auth.user.role !== "admin") throw new AppError("FORBIDDEN", "仅管理员可以维护成本。", 403);
+export async function authorizeOwner(request: Request) {
+  const auth = await authorize(request);
+  if (auth.user.role !== "admin") throw new AppError("FORBIDDEN", "仅管理员可以访问。", 403);
+  if (!auth.app.managed)
+    throw new AppError(
+      "MANAGEMENT_SETUP_REQUIRED",
+      "请先配置固定管理员环境变量，启用管理后台。",
+      503,
+    );
+  return auth;
+}
+export async function authorizeAdmin(request: Request) {
+  const auth = await authorize(request);
+  if (auth.user.role !== "admin") throw new AppError("FORBIDDEN", "仅管理员可以访问。", 403);
   return selectAccount(request, auth);
 }
 
@@ -120,25 +131,28 @@ function defaultAccountId(app: AppConfig, user: PortalUser) {
     user.accountId
   );
 }
-function selectAccount(request: Request, auth: AuthContext): AuthContext {
+function selectAccount(request: Request, auth: AuthContext) {
   const selected = new URL(request.url).searchParams.get("accountId");
-  // Viewer requests remain bound to their own account, regardless of client parameters.
-  if (auth.user.role !== "admin" || selected === null) return auth;
-  if (!auth.app.accounts.some((a) => a.id === selected && a.enabled))
+  const accountId =
+    auth.user.role === "admin" && selected !== null
+      ? selected
+      : defaultAccountId(auth.app, auth.user);
+  if (!auth.app.accounts.some((a) => a.id === accountId && a.enabled))
     throw new AppError("ACCOUNT_NOT_FOUND", "所选账户不存在或已停用。", 404);
-  return { ...auth, config: getAccountConfig(auth.app, selected) };
+  return { ...auth, config: getAccountConfig(auth.app, accountId) };
 }
-export function authorizeAccount(request: Request) {
-  return selectAccount(request, authorize(request));
+export async function authorizeAccount(request: Request) {
+  return selectAccount(request, await authorize(request));
 }
 export function sessionDetails(app: AppConfig, user: PortalUser) {
-  const accountId = defaultAccountId(app, user);
+  const accountId = app.accounts.some((a) => a.enabled) ? defaultAccountId(app, user) : "";
   return {
     authenticated: true,
     demo: app.builtInDemo,
     user: { username: user.username, displayName: user.displayName, role: user.role },
     accountId,
-    accountLabel: getAccountConfig(app, accountId).ACCOUNT_LABEL,
+    accountLabel: accountId ? getAccountConfig(app, accountId).ACCOUNT_LABEL : "",
+    managed: Boolean(app.managed),
     ...(user.role === "admin"
       ? {
           accounts: app.accounts

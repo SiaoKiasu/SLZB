@@ -90,3 +90,15 @@ Base URL 为本地 `http://localhost:3000` 或部署域名。所有账户接口�
 GET/POST `/api/session` 均返回默认 `accountId`。管理员额外获得 `accounts: [{ id, label, viewers }]`（仅启用账户，viewers 是查看用户显示名），无密钥；普通用户不返回该列表。管理员可在 `/api/dashboard`、`/api/sync`、各账户数据端点及 `/api/costs` 加 `?accountId=...`。会话保持管理员身份，审计仍记录真实修改人。管理员默认账户被停用时，默认打开第一个启用账户。
 
 前端切换会清空旧持仓并丢弃旧请求响应，成本编辑器随账户重新创建。存在未保存成本或正在保存时禁止切换，保存或重新加载后恢复。
+
+## 管理目录（固定管理员模式）
+
+`GET /api/admin` 返回脱敏账户列表、查看用户、固定管理员标识、revision 和最近 100 条操作记录。不会返回 API Key/Secret、密码或密码哈希。
+
+`POST /api/admin` 要求固定管理员 Cookie、同源 Origin 和最新 revision。JSON 使用以下 action：
+
+- `createAccount` / `updateAccount`：`account` 包含 id、label、source（binance/demo）、environment（mainnet/testnet）、enabled、principal（非负金额字符串或 null）；apiKey/apiSecret 可省略，修改时均留空保留原值，替换需成对填写。
+- `createUser` / `updateUser`：`user` 包含 username、displayName、accountId、enabled；新用户必填 password（8–256 位），修改时省略则保留。role/passwordHash 等额外字段拒绝。
+- `revokeSessions` / `deleteUser`：username。
+
+所有写操作返回更新后的同一脱敏结构。初始 revision 为 null，后续为 UUID。401 未登录，403 非管理员/固定身份不可修改，400 格式错误，409 版本冲突，503 未配置持久存储或初始化条件不足。普通用户即使自行调用这些接口也不能读取或修改管理数据。

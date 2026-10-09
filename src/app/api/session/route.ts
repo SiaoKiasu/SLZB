@@ -7,7 +7,8 @@ import {
   COOKIE_NAME,
   setSessionCookie,
 } from "@/lib/auth";
-import { getAppConfig, DEMO_CONFIG } from "@/lib/config";
+import { DEMO_CONFIG } from "@/lib/config";
+import { loadAppConfig } from "@/lib/runtime-config";
 import { verifyPassword } from "../../../../scripts/password.mjs";
 import { json, failure } from "@/lib/http";
 import { AppError } from "@/lib/errors";
@@ -16,14 +17,14 @@ export const runtime = "nodejs";
 const attempts = new Map<string, { count: number; until: number }>();
 export async function GET(request: Request) {
   try {
-    const auth = authorize(request);
+    const auth = await authorize(request);
     return authenticatedJson(sessionDetails(auth.app, auth.user), auth);
   } catch (e) {
     if (e instanceof AppError && e.status === 401)
       return json(
         {
           authenticated: false,
-          demo: getAppConfig().builtInDemo,
+          demo: (await loadAppConfig()).builtInDemo,
           error: { code: e.code, message: e.message },
         },
         401,
@@ -34,7 +35,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     checkOrigin(request);
-    const app = getAppConfig();
+    const app = await loadAppConfig();
     const key = createHash("sha256")
       .update(request.headers.get("x-forwarded-for")?.split(",")[0] ?? "local")
       .digest("hex");
@@ -68,7 +69,7 @@ export async function POST(request: Request) {
     if (
       !user?.enabled ||
       !verified ||
-      !app.accounts.some((a) => a.enabled && (user.role === "admin" || a.id === user.accountId))
+      (user.role !== "admin" && !app.accounts.some((a) => a.enabled && a.id === user.accountId))
     )
       throw new AppError("INVALID_CREDENTIALS", "用户名或密码不正确。", 401);
     attempts.delete(key);

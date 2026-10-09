@@ -5,7 +5,7 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 export async function POST(request: Request) {
   try {
-    const auth = authorizeAccount(request);
+    const auth = await authorizeAccount(request);
     checkOrigin(request);
     return authenticatedJson(await dashboard(auth.config, true), auth);
   } catch (e) {

@@ -8,6 +8,7 @@ vi.mock("node:fs", async (original) => ({
 }));
 import {
   authorize,
+  authorizeAccount,
   checkOrigin,
   createSession,
   SESSION_TTL,
@@ -27,17 +28,21 @@ describe("individual user sessions", () => {
     expect(readSession(token + "x", app, now + 1)).toBeNull();
     expect(readSession(token, app, now + SESSION_TTL * 1000)).toBeNull();
   });
-  it("requires login even for the demo and never accepts legacy global bearer tokens", () => {
+  it("requires login even for the demo and never accepts legacy global bearer tokens", async () => {
     configure();
-    expect(() => authorize(new Request("https://portal.test/api/dashboard"))).toThrow(/登录/);
-    expect(() =>
+    await expect(authorize(new Request("https://portal.test/api/dashboard"))).rejects.toThrow(
+      /登录/,
+    );
+    await expect(
       authorize(
         new Request("https://portal.test/api/dashboard", {
           headers: { authorization: "Bearer anything" },
         }),
       ),
-    ).toThrow(/登录/);
-    expect(authorize(request("/api/dashboard")).config.ACCOUNT_ID).toBe("alice-account");
+    ).rejects.toThrow(/登录/);
+    expect((await authorizeAccount(request("/api/dashboard"))).config.ACCOUNT_ID).toBe(
+      "alice-account",
+    );
   });
   it("invalidates existing sessions on password change, reassignment, revocation, disabling or secret rotation", () => {
     const app = configure();
@@ -70,9 +75,9 @@ describe("individual user sessions", () => {
       expect(readSession(token, changed)).toBeNull();
     }
   });
-  it("renews old active cookies and keeps username bound to the same account", () => {
+  it("renews old active cookies and keeps username bound to the same account", async () => {
     configure();
-    const auth = authorize(request("/api/dashboard", "alice", {}, Date.now() - 2 * 86400000));
+    const auth = await authorize(request("/api/dashboard", "alice", {}, Date.now() - 2 * 86400000));
     const response = authenticatedJson({ ok: true }, auth);
     const cookie = response.headers.get("set-cookie")!;
     expect(cookie).toContain(`Max-Age=${SESSION_TTL}`);
@@ -80,7 +85,7 @@ describe("individual user sessions", () => {
       readSession(cookie.split(";")[0].slice("slzb_session=".length), auth.app)?.user.accountId,
     ).toBe("alice-account");
     expect(
-      authenticatedJson({}, authorize(request("/api/dashboard"))).headers.has("set-cookie"),
+      authenticatedJson({}, await authorize(request("/api/dashboard"))).headers.has("set-cookie"),
     ).toBe(false);
   });
   it("rejects cross-origin writes while accepting normalized localhost Host", () => {

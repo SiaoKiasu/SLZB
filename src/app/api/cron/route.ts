@@ -1,5 +1,6 @@
 import { constantEqual } from "@/lib/auth";
-import { getAppConfig, getAccountConfig } from "@/lib/config";
+import { getAccountConfig } from "@/lib/config";
+import { loadAppConfig } from "@/lib/runtime-config";
 import { BinanceClient } from "@/lib/binance";
 import { valueHoldings, resolveEquity } from "@/lib/portfolio";
 import { saveSnapshot } from "@/lib/storage";
@@ -10,7 +11,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 export async function GET(request: Request) {
   try {
-    const app = getAppConfig();
+    const app = await loadAppConfig();
     if (
       !app.cronSecret ||
       !constantEqual(request.headers.get("authorization") ?? "", `Bearer ${app.cronSecret}`)

@@ -34,10 +34,12 @@ import {
   YAxis,
 } from "recharts";
 import { STABLECOINS } from "@/lib/assets";
+import dynamic from "next/dynamic";
+const AdminPanel = dynamic(() => import("./admin-panel").then((m) => m.AdminPanel));
 import { CostEditor } from "./cost-editor";
 import { LindenBrand, LindenMark } from "./brand";
 import type { Dashboard, Holding, Trade } from "@/lib/types";
-type Tab = "overview" | "holdings" | "activity";
+type Tab = "overview" | "holdings" | "activity" | "admin";
 const colors = ["#355b49", "#8da184", "#c5bc92", "#b0c6a8", "#dfdfc6", "#8eaba8"];
 const assetNames: Record<string, string> = {
   BTC: "Bitcoin",
@@ -112,6 +114,7 @@ export function Portal() {
   } | null>(null);
   const [accounts, setAccounts] = useState<{ id: string; label: string; viewers: string[] }[]>([]);
   const [selectedAccount, setSelectedAccount] = useState("");
+  const [adminPending, setAdminPending] = useState(false);
   const [costPending, setCostPending] = useState(false);
   const [costEditorOpen, setCostEditorOpen] = useState(false);
   const [password, setPassword] = useState("");
@@ -145,6 +148,7 @@ export function Portal() {
       setViewer(s.user);
       setAccounts(s.accounts ?? []);
       setSelectedAccount(s.accountId);
+      setTab(s.user.role === "admin" && !s.accountId ? "admin" : "overview");
       setSession("ready");
     } catch (e) {
       if (generation.current !== current) return;
@@ -158,7 +162,7 @@ export function Portal() {
     }
   }, []);
   const load = useCallback(async () => {
-    if (loading.current) return;
+    if (loading.current || !selectedAccount || tab === "admin") return;
     loading.current = true;
     const current = generation.current;
     setBusy(true);
@@ -183,7 +187,7 @@ export function Portal() {
         setBusy(false);
       }
     }
-  }, [selectedAccount]);
+  }, [selectedAccount, tab]);
   useEffect(() => {
     void checkSession();
   }, [checkSession]);
@@ -227,6 +231,7 @@ export function Portal() {
       setViewer(result.user);
       setAccounts(result.accounts ?? []);
       setSelectedAccount(result.accountId);
+      setTab(result.user.role === "admin" && !result.accountId ? "admin" : "overview");
       authChannel.current?.postMessage("changed");
       setData(null);
       setSession("ready");
@@ -237,6 +242,7 @@ export function Portal() {
     }
   }
   async function logout() {
+    if ((adminPending || costPending) && !window.confirm("退出并放弃当前编辑？")) return;
     try {
       await api("/api/session", { method: "DELETE" });
       generation.current++;
@@ -255,6 +261,10 @@ export function Portal() {
     }
   }
   function navigate(next: Tab) {
+    if (adminPending || costPending) return;
+    generation.current++;
+    loading.current = false;
+    setBusy(false);
     setTab(next);
     setSearch("");
     setSide("ALL");
@@ -425,6 +435,7 @@ export function Portal() {
     overview: "账户总览",
     holdings: "资产持仓",
     activity: "交易记录",
+    admin: "管理后台",
   }[tab];
   return (
     <div className="shell">
@@ -443,6 +454,7 @@ export function Portal() {
           ).map((item) => (
             <button
               key={item.id}
+              disabled={adminPending || costPending}
               className={`nav-item ${tab === item.id ? "active" : ""}`}
               onClick={() => navigate(item.id)}
             >
@@ -451,6 +463,17 @@ export function Portal() {
               {tab === item.id && <span className="nav-dot" />}
             </button>
           ))}
+          {viewer?.role === "admin" && (
+            <button
+              className={`nav-item ${tab === "admin" ? "active" : ""}`}
+              disabled={costPending}
+              onClick={() => navigate("admin")}
+            >
+              <ShieldCheck size={18} />
+              <span>管理后台</span>
+              {tab === "admin" && <span className="nav-dot" />}
+            </button>
+          )}
         </nav>
         <div className="sidebar-bottom">
           <div className="profile">
@@ -494,505 +517,548 @@ export function Portal() {
             <div>
               <h1>
                 {title}
-                <button
-                  className="icon-button"
-                  onClick={() => setHidden(!hidden)}
-                  aria-label={hidden ? "显示金额" : "隐藏金额"}
-                >
-                  {hidden ? <EyeOff size={19} /> : <Eye size={19} />}
-                </button>
+                {tab !== "admin" && (
+                  <button
+                    className="icon-button"
+                    onClick={() => setHidden(!hidden)}
+                    aria-label={hidden ? "显示金额" : "隐藏金额"}
+                  >
+                    {hidden ? <EyeOff size={19} /> : <Eye size={19} />}
+                  </button>
+                )}
               </h1>
             </div>
-            <div className="heading-actions">
-              {viewer?.role === "admin" && (
-                <button className="button" onClick={() => setCostEditorOpen((v) => !v)}>
-                  <ShieldCheck size={15} />
-                  {costEditorOpen ? "收起成本管理" : "成本管理"}
-                </button>
-              )}
-              {(data?.source === "demo" || error || stale || !syncIssues.length) && (
-                <Badge muted={data?.source === "demo" || Boolean(error) || Boolean(stale)}>
-                  {data?.source === "demo"
-                    ? "演示模式"
-                    : error || stale
-                      ? "数据待更新"
-                      : data
-                        ? "Binance 现货"
-                        : "连接中"}
-                </Badge>
-              )}
-              {data?.source !== "demo" &&
-                syncIssues.map((issue) => (
-                  <Badge key={issue} muted>
-                    {issue}
+            {tab !== "admin" && selectedAccount && (
+              <div className="heading-actions">
+                {viewer?.role === "admin" && (
+                  <button className="button" onClick={() => setCostEditorOpen((v) => !v)}>
+                    <ShieldCheck size={15} />
+                    {costEditorOpen ? "收起成本管理" : "成本管理"}
+                  </button>
+                )}
+                {(data?.source === "demo" || error || stale || !syncIssues.length) && (
+                  <Badge muted={data?.source === "demo" || Boolean(error) || Boolean(stale)}>
+                    {data?.source === "demo"
+                      ? "演示模式"
+                      : error || stale
+                        ? "数据待更新"
+                        : data
+                          ? "Binance 现货"
+                          : "连接中"}
                   </Badge>
-                ))}
-              <button className="button" onClick={load} disabled={busy}>
-                <RefreshCw size={15} className={busy ? "spin" : ""} />
-                {busy ? "更新中" : "刷新数据"}
-              </button>
-            </div>
+                )}
+                {data?.source !== "demo" &&
+                  syncIssues.map((issue) => (
+                    <Badge key={issue} muted>
+                      {issue}
+                    </Badge>
+                  ))}
+                <button className="button" onClick={load} disabled={busy}>
+                  <RefreshCw size={15} className={busy ? "spin" : ""} />
+                  {busy ? "更新中" : "刷新数据"}
+                </button>
+              </div>
+            )}
           </div>
-          {viewer?.role === "admin" && (
-            <div className="account-switcher">
-              <label htmlFor="managed-account">管理账户</label>
-              <select
-                id="managed-account"
-                value={selectedAccount}
-                disabled={costPending}
-                onChange={(e) => {
-                  generation.current++;
-                  loading.current = false;
-                  setData(null);
-                  setError("");
-                  setBusy(true);
-                  setSearch("");
-                  setPage(1);
-                  setSide("ALL");
-                  setSelectedAccount(e.target.value);
-                }}
-              >
-                {accounts.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.label}
-                    {a.viewers.length ? ` · ${a.viewers.join("、")}` : ""}
-                  </option>
-                ))}
-              </select>
-              {costPending && <small>保存或重新加载成本后可切换账户</small>}
-            </div>
-          )}
-          {error && (
-            <div className="error" role="alert">
-              {error}
-              {data && " 当前展示上次成功数据。"}
-            </div>
-          )}
-          {viewer?.role === "admin" && costEditorOpen && (
-            <CostEditor
-              key={selectedAccount}
-              accountId={selectedAccount}
-              accountLabel={accounts.find((a) => a.id === selectedAccount)?.label ?? ""}
-              onPendingChange={setCostPending}
-              holdings={data?.holdings ?? []}
-              trades={data?.trades ?? []}
-              onSaved={async () => {
-                const current = ++generation.current;
+          {viewer?.role === "admin" && tab === "admin" ? (
+            <AdminPanel
+              onPendingChange={setAdminPending}
+              onUnauthorized={() => void checkSession()}
+              onUpdated={async () => {
+                const current = generation.current;
+                const s = await api("/api/session");
+                if (current !== generation.current) return;
+                setAccounts(s.accounts ?? []);
+                setSelectedAccount((previous) =>
+                  s.accounts?.some((a: { id: string }) => a.id === previous)
+                    ? previous
+                    : s.accountId,
+                );
+                setData(null);
+              }}
+              onView={(id, costs) => {
+                generation.current++;
                 loading.current = false;
-                try {
-                  const next = await api(
-                    `/api/dashboard?accountId=${encodeURIComponent(selectedAccount)}`,
-                  );
-                  if (current === generation.current) {
-                    setData(next);
-                    setError("");
-                  }
-                } catch (e) {
-                  if (current === generation.current) setError((e as Error).message);
-                } finally {
-                  if (current === generation.current) setBusy(false);
-                }
+                setBusy(false);
+                setSelectedAccount(id);
+                setData(null);
+                setError("");
+                setCostEditorOpen(Boolean(costs));
+                setTab(costs ? "holdings" : "overview");
               }}
             />
-          )}
-          {data?.source === "demo" && (
-            <div className="demo-banner">
-              <span>
-                <span className="demo-label">DEMO</span>当前为模拟账户，所有数据仅供预览。
-              </span>
-            </div>
-          )}
-          {!data ? (
-            <div className="empty large">
-              {busy ? (
-                <>
-                  <LoaderCircle className="spin" size={28} />
-                  <h3>正在同步账户数据</h3>
-                  <p>第一次连接可能需要一点时间。</p>
-                </>
-              ) : (
-                <>
-                  <Wallet size={30} />
-                  <h3>暂时无法加载账户</h3>
-                  <p>请稍后刷新，如仍无法加载，请联系管理员。</p>
-                </>
-              )}
-            </div>
           ) : (
             <>
-              {(tab === "overview" || tab === "holdings") && (
-                <div className="stats">
-                  <div className="stat featured">
-                    <div className="stat-label">
-                      {data.summary.equityComplete ? "总资产估值 · Equity" : "已估值资产小计"}
-                      {data.source === "binance" && data.summary.equitySource === "calculated" && (
-                        <span className="subtle-tag">估算</span>
-                      )}
-                      <Wallet size={17} />
-                    </div>
-                    <div className="stat-value">
-                      {money(data.summary.equity)}
-                      <span>USDT</span>
-                    </div>
-                  </div>
-                  <div className="stat">
-                    <div className="stat-label">
-                      已实现盈亏
-                      {data.summary.realizedPnl !== null &&
-                        !data.summary.realizedPnlComplete &&
-                        "（暂计）"}
-                      <ArrowUpRight size={17} />
-                    </div>
-                    <div
-                      className={`stat-value ${Number(data.summary.realizedPnl) < 0 ? "negative" : "positive"}`}
-                    >
-                      {profit(data.summary.realizedPnl)}
-                      <span>USDT</span>
-                    </div>
-                    {data.summary.realizedPnl === null && (
-                      <div className="stat-note">{data.summary.realizedPnlNote}</div>
-                    )}
-                  </div>
-                  <div className="stat">
-                    <div className="stat-label">
-                      未实现盈亏
-                      <BarChart3 size={17} />
-                    </div>
-                    <div
-                      className={`stat-value ${Number(data.summary.unrealizedPnl) < 0 ? "negative" : "positive"}`}
-                    >
-                      {profit(data.summary.unrealizedPnl)}
-                      <span>USDT</span>
-                    </div>
-                    {data.summary.unrealizedPnl === null && (
-                      <div className="stat-note">缺少成本或行情</div>
-                    )}
-                  </div>
-                  <div className="stat">
-                    <div className="stat-label">
-                      现金 · USDT
-                      <Wallet size={17} />
-                    </div>
-                    <div className="stat-value">
-                      {money(data.summary.cash)}
-                      <span>USDT</span>
-                    </div>
-                    <div className="stat-note">
-                      可用 {money(data.summary.cashFree)} · 冻结 {money(data.summary.cashLocked)}
-                    </div>
-                  </div>
+              {viewer?.role === "admin" && selectedAccount && (
+                <div className="account-switcher">
+                  <label htmlFor="managed-account">管理账户</label>
+                  <select
+                    id="managed-account"
+                    value={selectedAccount}
+                    disabled={costPending}
+                    onChange={(e) => {
+                      generation.current++;
+                      loading.current = false;
+                      setData(null);
+                      setError("");
+                      setBusy(true);
+                      setSearch("");
+                      setPage(1);
+                      setSide("ALL");
+                      setSelectedAccount(e.target.value);
+                    }}
+                  >
+                    {accounts.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.label}
+                        {a.viewers.length ? ` · ${a.viewers.join("、")}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                  {costPending && <small>保存或重新加载成本后可切换账户</small>}
                 </div>
               )}
-              {(tab === "overview" || tab === "holdings") && (
-                <div className="capital-strip">
-                  <div>
-                    <span>账户本金</span>
-                    <strong>
-                      {data.summary.principal === null
-                        ? "尚未设置"
-                        : `${money(data.summary.principal)} USDT`}
-                    </strong>
-                  </div>
+              {error && (
+                <div className="error" role="alert">
+                  {error}
+                  {data && " 当前展示上次成功数据。"}
                 </div>
               )}
-              {tab === "overview" && (
+              {viewer?.role === "admin" && costEditorOpen && (
+                <CostEditor
+                  key={selectedAccount}
+                  accountId={selectedAccount}
+                  accountLabel={accounts.find((a) => a.id === selectedAccount)?.label ?? ""}
+                  onPendingChange={setCostPending}
+                  holdings={data?.holdings ?? []}
+                  trades={data?.trades ?? []}
+                  onSaved={async () => {
+                    const current = ++generation.current;
+                    loading.current = false;
+                    try {
+                      const next = await api(
+                        `/api/dashboard?accountId=${encodeURIComponent(selectedAccount)}`,
+                      );
+                      if (current === generation.current) {
+                        setData(next);
+                        setError("");
+                      }
+                    } catch (e) {
+                      if (current === generation.current) setError((e as Error).message);
+                    } finally {
+                      if (current === generation.current) setBusy(false);
+                    }
+                  }}
+                />
+              )}
+              {data?.source === "demo" && (
+                <div className="demo-banner">
+                  <span>
+                    <span className="demo-label">DEMO</span>当前为模拟账户，所有数据仅供预览。
+                  </span>
+                </div>
+              )}
+              {!data ? (
+                <div className="empty large">
+                  {busy ? (
+                    <>
+                      <LoaderCircle className="spin" size={28} />
+                      <h3>正在同步账户数据</h3>
+                      <p>第一次连接可能需要一点时间。</p>
+                    </>
+                  ) : (
+                    <>
+                      <Wallet size={30} />
+                      <h3>暂时无法加载账户</h3>
+                      <p>请稍后刷新，如仍无法加载，请联系管理员。</p>
+                    </>
+                  )}
+                </div>
+              ) : (
                 <>
-                  <div className="charts-grid">
-                    <section className="panel chart-panel">
+                  {(tab === "overview" || tab === "holdings") && (
+                    <div className="stats">
+                      <div className="stat featured">
+                        <div className="stat-label">
+                          {data.summary.equityComplete ? "总资产估值 · Equity" : "已估值资产小计"}
+                          {data.source === "binance" &&
+                            data.summary.equitySource === "calculated" && (
+                              <span className="subtle-tag">估算</span>
+                            )}
+                          <Wallet size={17} />
+                        </div>
+                        <div className="stat-value">
+                          {money(data.summary.equity)}
+                          <span>USDT</span>
+                        </div>
+                      </div>
+                      <div className="stat">
+                        <div className="stat-label">
+                          已实现盈亏
+                          {data.summary.realizedPnl !== null &&
+                            !data.summary.realizedPnlComplete &&
+                            "（暂计）"}
+                          <ArrowUpRight size={17} />
+                        </div>
+                        <div
+                          className={`stat-value ${Number(data.summary.realizedPnl) < 0 ? "negative" : "positive"}`}
+                        >
+                          {profit(data.summary.realizedPnl)}
+                          <span>USDT</span>
+                        </div>
+                        {data.summary.realizedPnl === null && (
+                          <div className="stat-note">{data.summary.realizedPnlNote}</div>
+                        )}
+                      </div>
+                      <div className="stat">
+                        <div className="stat-label">
+                          未实现盈亏
+                          <BarChart3 size={17} />
+                        </div>
+                        <div
+                          className={`stat-value ${Number(data.summary.unrealizedPnl) < 0 ? "negative" : "positive"}`}
+                        >
+                          {profit(data.summary.unrealizedPnl)}
+                          <span>USDT</span>
+                        </div>
+                        {data.summary.unrealizedPnl === null && (
+                          <div className="stat-note">缺少成本或行情</div>
+                        )}
+                      </div>
+                      <div className="stat">
+                        <div className="stat-label">
+                          现金 · USDT
+                          <Wallet size={17} />
+                        </div>
+                        <div className="stat-value">
+                          {money(data.summary.cash)}
+                          <span>USDT</span>
+                        </div>
+                        <div className="stat-note">
+                          可用 {money(data.summary.cashFree)} · 冻结{" "}
+                          {money(data.summary.cashLocked)}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {(tab === "overview" || tab === "holdings") && (
+                    <div className="capital-strip">
+                      <div>
+                        <span>账户本金</span>
+                        <strong>
+                          {data.summary.principal === null
+                            ? "尚未设置"
+                            : `${money(data.summary.principal)} USDT`}
+                        </strong>
+                      </div>
+                    </div>
+                  )}
+                  {tab === "overview" && (
+                    <>
+                      <div className="charts-grid">
+                        <section className="panel chart-panel">
+                          <div className="panel-heading">
+                            <div>
+                              <h2>
+                                资产走势 <span className="subtle-tag">USDT</span>
+                              </h2>
+                            </div>
+                            <div className="segmented">
+                              {[
+                                { d: 1, label: "24H" },
+                                { d: 7, label: "7D" },
+                                { d: 30, label: "30D" },
+                                { d: 90, label: "90D" },
+                              ].map((p) => (
+                                <button
+                                  key={p.d}
+                                  className={period === p.d ? "selected" : ""}
+                                  onClick={() => setPeriod(p.d)}
+                                >
+                                  {p.label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                          <EquityChart data={data} period={period} hidden={hidden} />
+                        </section>
+                        <section className="panel allocation-panel">
+                          <div className="panel-heading">
+                            <div>
+                              <h2>资产分布</h2>
+                            </div>
+                            <span className="subtle-tag">{data.holdings.length} ASSETS</span>
+                          </div>
+                          <div className="donut-wrap">
+                            <ResponsiveContainer width="100%" height={180}>
+                              <PieChart>
+                                <Pie
+                                  data={data.holdings
+                                    .filter((h) => Number(h.value) > 0)
+                                    .map((h) => ({ name: h.asset, value: Number(h.value) }))}
+                                  dataKey="value"
+                                  innerRadius={62}
+                                  outerRadius={79}
+                                  paddingAngle={3}
+                                  stroke="none"
+                                  startAngle={90}
+                                  endAngle={-270}
+                                >
+                                  {data.holdings
+                                    .filter((h) => Number(h.value) > 0)
+                                    .map((h, i) => (
+                                      <Cell key={h.asset} fill={colors[i % colors.length]} />
+                                    ))}
+                                </Pie>
+                                <Tooltip
+                                  formatter={(v) =>
+                                    hidden ? "已隐藏" : `${number(Number(v))} USDT`
+                                  }
+                                />
+                              </PieChart>
+                            </ResponsiveContainer>
+                            <div className="donut-center">
+                              <small>持有资产</small>
+                              <strong>
+                                {data.holdings.length}
+                                <span> 种</span>
+                              </strong>
+                            </div>
+                          </div>
+                          <div className="allocation-list">
+                            {data.holdings.slice(0, 5).map((h, i) => (
+                              <div key={h.asset}>
+                                <span>
+                                  <i style={{ background: colors[i % colors.length] }} />
+                                  {h.asset}
+                                </span>
+                                <strong>{number(h.allocation, 1)}%</strong>
+                              </div>
+                            ))}
+                          </div>
+                        </section>
+                      </div>
+                    </>
+                  )}
+                  {(tab === "overview" || tab === "holdings") && (
+                    <section className="panel holdings-panel">
                       <div className="panel-heading">
                         <div>
                           <h2>
-                            资产走势 <span className="subtle-tag">USDT</span>
+                            资产持仓 <span className="count">{data.holdings.length}</span>
                           </h2>
                         </div>
-                        <div className="segmented">
-                          {[
-                            { d: 1, label: "24H" },
-                            { d: 7, label: "7D" },
-                            { d: 30, label: "30D" },
-                            { d: 90, label: "90D" },
-                          ].map((p) => (
-                            <button
-                              key={p.d}
-                              className={period === p.d ? "selected" : ""}
-                              onClick={() => setPeriod(p.d)}
-                            >
-                              {p.label}
-                            </button>
-                          ))}
-                        </div>
+                        {tab === "overview" ? (
+                          <button className="text-button" onClick={() => navigate("holdings")}>
+                            查看全部 <ArrowUpRight size={15} />
+                          </button>
+                        ) : (
+                          <div className="table-tools">
+                            <label className="checkbox">
+                              <input
+                                type="checkbox"
+                                checked={!showSmall}
+                                onChange={(e) => setShowSmall(!e.target.checked)}
+                              />
+                              隐藏小额资产
+                            </label>
+                            <SearchBox value={search} onChange={setSearch} placeholder="搜索币种" />
+                          </div>
+                        )}
                       </div>
-                      <EquityChart data={data} period={period} hidden={hidden} />
+                      <HoldingTable
+                        holdings={tab === "overview" ? data.holdings.slice(0, 5) : holdings}
+                        money={money}
+                        profit={profit}
+                        hidden={hidden}
+                      />
                     </section>
-                    <section className="panel allocation-panel">
+                  )}
+                  {tab === "overview" && (
+                    <section className="panel recent-panel">
                       <div className="panel-heading">
                         <div>
-                          <h2>资产分布</h2>
+                          <h2>最近成交</h2>
                         </div>
-                        <span className="subtle-tag">{data.holdings.length} ASSETS</span>
+                        <button className="text-button" onClick={() => navigate("activity")}>
+                          全部交易 <ArrowUpRight size={15} />
+                        </button>
                       </div>
-                      <div className="donut-wrap">
-                        <ResponsiveContainer width="100%" height={180}>
-                          <PieChart>
-                            <Pie
-                              data={data.holdings
-                                .filter((h) => Number(h.value) > 0)
-                                .map((h) => ({ name: h.asset, value: Number(h.value) }))}
-                              dataKey="value"
-                              innerRadius={62}
-                              outerRadius={79}
-                              paddingAngle={3}
-                              stroke="none"
-                              startAngle={90}
-                              endAngle={-270}
-                            >
-                              {data.holdings
-                                .filter((h) => Number(h.value) > 0)
-                                .map((h, i) => (
-                                  <Cell key={h.asset} fill={colors[i % colors.length]} />
-                                ))}
-                            </Pie>
-                            <Tooltip
-                              formatter={(v) => (hidden ? "已隐藏" : `${number(Number(v))} USDT`)}
-                            />
-                          </PieChart>
-                        </ResponsiveContainer>
-                        <div className="donut-center">
-                          <small>持有资产</small>
+                      <TradeTable trades={data.trades.slice(0, 4)} hidden={hidden} />
+                    </section>
+                  )}
+                  {tab === "activity" && (
+                    <>
+                      <div className="activity-summary">
+                        <div>
+                          <span>本次加载成交</span>
                           <strong>
-                            {data.holdings.length}
-                            <span> 种</span>
+                            {data.trades.length}
+                            <small> 笔</small>
+                          </strong>
+                        </div>
+                        <div>
+                          <span>当前挂单</span>
+                          <strong>
+                            {data.connection.ordersComplete ? data.orders.length : "—"}
+                            <small> 笔</small>
+                          </strong>
+                        </div>
+                        <div>
+                          <span>覆盖交易对</span>
+                          <strong>
+                            {data.connection.symbols.length}
+                            <small> 个</small>
                           </strong>
                         </div>
                       </div>
-                      <div className="allocation-list">
-                        {data.holdings.slice(0, 5).map((h, i) => (
-                          <div key={h.asset}>
-                            <span>
-                              <i style={{ background: colors[i % colors.length] }} />
-                              {h.asset}
-                            </span>
-                            <strong>{number(h.allocation, 1)}%</strong>
+                      <section className="panel">
+                        <div className="panel-heading">
+                          <div>
+                            <h2>成交明细</h2>
                           </div>
-                        ))}
-                      </div>
-                    </section>
-                  </div>
-                </>
-              )}
-              {(tab === "overview" || tab === "holdings") && (
-                <section className="panel holdings-panel">
-                  <div className="panel-heading">
-                    <div>
-                      <h2>
-                        资产持仓 <span className="count">{data.holdings.length}</span>
-                      </h2>
-                    </div>
-                    {tab === "overview" ? (
-                      <button className="text-button" onClick={() => navigate("holdings")}>
-                        查看全部 <ArrowUpRight size={15} />
-                      </button>
-                    ) : (
-                      <div className="table-tools">
-                        <label className="checkbox">
-                          <input
-                            type="checkbox"
-                            checked={!showSmall}
-                            onChange={(e) => setShowSmall(!e.target.checked)}
-                          />
-                          隐藏小额资产
-                        </label>
-                        <SearchBox value={search} onChange={setSearch} placeholder="搜索币种" />
-                      </div>
-                    )}
-                  </div>
-                  <HoldingTable
-                    holdings={tab === "overview" ? data.holdings.slice(0, 5) : holdings}
-                    money={money}
-                    profit={profit}
-                    hidden={hidden}
-                  />
-                </section>
-              )}
-              {tab === "overview" && (
-                <section className="panel recent-panel">
-                  <div className="panel-heading">
-                    <div>
-                      <h2>最近成交</h2>
-                    </div>
-                    <button className="text-button" onClick={() => navigate("activity")}>
-                      全部交易 <ArrowUpRight size={15} />
-                    </button>
-                  </div>
-                  <TradeTable trades={data.trades.slice(0, 4)} hidden={hidden} />
-                </section>
-              )}
-              {tab === "activity" && (
-                <>
-                  <div className="activity-summary">
-                    <div>
-                      <span>本次加载成交</span>
-                      <strong>
-                        {data.trades.length}
-                        <small> 笔</small>
-                      </strong>
-                    </div>
-                    <div>
-                      <span>当前挂单</span>
-                      <strong>
-                        {data.connection.ordersComplete ? data.orders.length : "—"}
-                        <small> 笔</small>
-                      </strong>
-                    </div>
-                    <div>
-                      <span>覆盖交易对</span>
-                      <strong>
-                        {data.connection.symbols.length}
-                        <small> 个</small>
-                      </strong>
-                    </div>
-                  </div>
-                  <section className="panel">
-                    <div className="panel-heading">
-                      <div>
-                        <h2>成交明细</h2>
-                      </div>
-                      <button className="button" onClick={exportTrades}>
-                        <Download size={15} />
-                        导出 CSV
-                      </button>
-                    </div>
-                    <div className="filterbar">
-                      <div className="segmented">
-                        {[
-                          { v: "ALL", l: "全部成交" },
-                          { v: "BUY", l: "买入" },
-                          { v: "SELL", l: "卖出" },
-                        ].map((s) => (
-                          <button
-                            key={s.v}
-                            className={side === s.v ? "selected" : ""}
-                            onClick={() => {
-                              setSide(s.v);
+                          <button className="button" onClick={exportTrades}>
+                            <Download size={15} />
+                            导出 CSV
+                          </button>
+                        </div>
+                        <div className="filterbar">
+                          <div className="segmented">
+                            {[
+                              { v: "ALL", l: "全部成交" },
+                              { v: "BUY", l: "买入" },
+                              { v: "SELL", l: "卖出" },
+                            ].map((s) => (
+                              <button
+                                key={s.v}
+                                className={side === s.v ? "selected" : ""}
+                                onClick={() => {
+                                  setSide(s.v);
+                                  setPage(1);
+                                }}
+                              >
+                                {s.l}
+                              </button>
+                            ))}
+                          </div>
+                          <SearchBox
+                            value={search}
+                            onChange={(s) => {
+                              setSearch(s);
                               setPage(1);
                             }}
-                          >
-                            {s.l}
-                          </button>
-                        ))}
-                      </div>
-                      <SearchBox
-                        value={search}
-                        onChange={(s) => {
-                          setSearch(s);
-                          setPage(1);
-                        }}
-                        placeholder="搜索交易对"
-                      />
-                    </div>
-                    <TradeTable
-                      trades={trades.slice((safePage - 1) * 12, safePage * 12)}
-                      hidden={hidden}
-                    />
-                    <div className="pagination">
-                      <span>共 {trades.length} 笔匹配成交</span>
-                      <div>
-                        <button
-                          className="icon-button"
-                          disabled={safePage <= 1}
-                          onClick={() => setPage(safePage - 1)}
-                          aria-label="上一页"
-                        >
-                          <ChevronLeft size={18} />
-                        </button>
-                        {safePage} / {pages}
-                        <button
-                          className="icon-button"
-                          disabled={safePage >= pages}
-                          onClick={() => setPage(safePage + 1)}
-                          aria-label="下一页"
-                        >
-                          <ChevronRight size={18} />
-                        </button>
-                      </div>
-                    </div>
-                  </section>
-                  <section className="panel">
-                    <div className="panel-heading">
-                      <div>
-                        <h2>当前挂单</h2>
-                      </div>
-                      <span className="count">
-                        {data.connection.ordersComplete ? data.orders.length : "同步失败"}
-                      </span>
-                    </div>
-                    <div className="table-scroll">
-                      <table>
-                        <thead>
-                          <tr>
-                            <th>交易对</th>
-                            <th>方向 / 类型</th>
-                            <th>委托价格</th>
-                            <th>委托数量</th>
-                            <th>已成交数量</th>
-                            <th>状态</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {data.orders.map((o) => (
-                            <tr key={`${o.symbol}-${o.id}`}>
-                              <td>
-                                <strong>{o.symbol}</strong>
-                              </td>
-                              <td>
-                                <span className={o.side === "BUY" ? "positive" : "negative"}>
-                                  {o.side === "BUY" ? "买入" : "卖出"}
-                                </span>{" "}
-                                · {o.type}
-                              </td>
-                              <td className="numeric">{money(o.price)}</td>
-                              <td className="numeric">{hidden ? "••••" : number(o.quantity, 8)}</td>
-                              <td className="numeric">
-                                {hidden ? "••••" : number(o.executedQuantity, 8)}
-                              </td>
-                              <td>
-                                <span className="subtle-tag">
-                                  {o.status === "NEW"
-                                    ? "等待成交"
-                                    : o.status === "PARTIALLY_FILLED"
-                                      ? "部分成交"
-                                      : o.status}
-                                </span>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                      {!data.orders.length && (
-                        <div className="empty">
-                          {data.connection.ordersComplete ? "暂无挂单" : "挂单读取失败，请重试。"}
+                            placeholder="搜索交易对"
+                          />
                         </div>
-                      )}
-                    </div>
-                  </section>
+                        <TradeTable
+                          trades={trades.slice((safePage - 1) * 12, safePage * 12)}
+                          hidden={hidden}
+                        />
+                        <div className="pagination">
+                          <span>共 {trades.length} 笔匹配成交</span>
+                          <div>
+                            <button
+                              className="icon-button"
+                              disabled={safePage <= 1}
+                              onClick={() => setPage(safePage - 1)}
+                              aria-label="上一页"
+                            >
+                              <ChevronLeft size={18} />
+                            </button>
+                            {safePage} / {pages}
+                            <button
+                              className="icon-button"
+                              disabled={safePage >= pages}
+                              onClick={() => setPage(safePage + 1)}
+                              aria-label="下一页"
+                            >
+                              <ChevronRight size={18} />
+                            </button>
+                          </div>
+                        </div>
+                      </section>
+                      <section className="panel">
+                        <div className="panel-heading">
+                          <div>
+                            <h2>当前挂单</h2>
+                          </div>
+                          <span className="count">
+                            {data.connection.ordersComplete ? data.orders.length : "同步失败"}
+                          </span>
+                        </div>
+                        <div className="table-scroll">
+                          <table>
+                            <thead>
+                              <tr>
+                                <th>交易对</th>
+                                <th>方向 / 类型</th>
+                                <th>委托价格</th>
+                                <th>委托数量</th>
+                                <th>已成交数量</th>
+                                <th>状态</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {data.orders.map((o) => (
+                                <tr key={`${o.symbol}-${o.id}`}>
+                                  <td>
+                                    <strong>{o.symbol}</strong>
+                                  </td>
+                                  <td>
+                                    <span className={o.side === "BUY" ? "positive" : "negative"}>
+                                      {o.side === "BUY" ? "买入" : "卖出"}
+                                    </span>{" "}
+                                    · {o.type}
+                                  </td>
+                                  <td className="numeric">{money(o.price)}</td>
+                                  <td className="numeric">
+                                    {hidden ? "••••" : number(o.quantity, 8)}
+                                  </td>
+                                  <td className="numeric">
+                                    {hidden ? "••••" : number(o.executedQuantity, 8)}
+                                  </td>
+                                  <td>
+                                    <span className="subtle-tag">
+                                      {o.status === "NEW"
+                                        ? "等待成交"
+                                        : o.status === "PARTIALLY_FILLED"
+                                          ? "部分成交"
+                                          : o.status}
+                                    </span>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                          {!data.orders.length && (
+                            <div className="empty">
+                              {data.connection.ordersComplete
+                                ? "暂无挂单"
+                                : "挂单读取失败，请重试。"}
+                            </div>
+                          )}
+                        </div>
+                      </section>
+                    </>
+                  )}
+                  {data.warnings.length > 0 && (
+                    <details className="data-notes" open={Boolean(data.summary.unpricedAssets)}>
+                      <summary>
+                        <CircleHelp size={15} />
+                        数据说明与覆盖范围 <span>{data.warnings.length}</span>
+                      </summary>
+                      <ul>
+                        {data.warnings.map((w) => (
+                          <li key={w}>{w}</li>
+                        ))}
+                      </ul>
+                    </details>
+                  )}
+                  <footer className="page-footer">
+                    <span>更新于 {time(data.updatedAt, true)}</span>
+                  </footer>
                 </>
               )}
-              {data.warnings.length > 0 && (
-                <details className="data-notes" open={Boolean(data.summary.unpricedAssets)}>
-                  <summary>
-                    <CircleHelp size={15} />
-                    数据说明与覆盖范围 <span>{data.warnings.length}</span>
-                  </summary>
-                  <ul>
-                    {data.warnings.map((w) => (
-                      <li key={w}>{w}</li>
-                    ))}
-                  </ul>
-                </details>
-              )}
-              <footer className="page-footer">
-                <span>更新于 {time(data.updatedAt, true)}</span>
-              </footer>
             </>
           )}
         </main>

@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   try {
-    const auth = authorizeAdmin(request);
+    const auth = await authorizeAdmin(request);
     return authenticatedJson(
       {
         ...(await readCosts(auth.config)),
@@ -21,7 +21,7 @@ export async function GET(request: Request) {
 }
 export async function PUT(request: Request) {
   try {
-    const auth = authorizeAdmin(request);
+    const auth = await authorizeAdmin(request);
     checkOrigin(request);
     if (Number(request.headers.get("content-length") ?? 0) > 50000)
       throw new AppError("INVALID_BODY", "成本配置过大。", 400);

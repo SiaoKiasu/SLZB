@@ -2,57 +2,37 @@
 
 **管理员配置账户，朋友用自己的用户名和密码登录，只读查看被分配给他的资产。**
 
-支持多个查看用户及多个 Binance 现货账户。每个普通用户绑定一个交易所账户；同一账户可分配给多个用户。管理员可以切换并管理所有启用的账户。普通用户只能查看账户总览、资产持仓和交易记录；管理员多一个「成本管理」入口。API 与用户权限仍通过本地工具维护，网页没有交易入口。
+支持多个 Binance 现货账户。固定管理员可以查看所有启用账户，并在网页管理用户、密码、账户绑定、API、本金和手工成本。普通用户只有账户总览、资产持仓和交易记录，不显示管理界面，管理接口也拒绝访问。
 
-## 本地预览
+## 首次设置
 
-需要 Node.js **24.x**。
+需要 Node.js **24.x**。在项目目录运行：
 
 ```bash
 npm ci
-npm run dev
+npm run admin:setup
 ```
 
-打开 [http://localhost:3000](http://localhost:3000)。尚未配置自建账号时，演示用户名 **demo**，密码 **demo123456**。演示仅有模拟数据；创建自己的配置后默认演示账号自动停用。
+输入固定管理员用户名和密码。命令将生成私密 `.slzb/admin-env.txt`，其中是初始化所需的四项环境变量（密码只保存 scrypt 哈希）。它不会覆盖现有 `.env.local`，也不会自动导入旧用户。
 
-## 你如何配置（管理员）
+### Vercel
 
-在项目目录执行：
+1. 为项目连接 Neon Postgres，并设置 `DATABASE_URL`。
+2. 将 `.slzb/admin-env.txt` 中的 `ADMIN_USERNAME`、`ADMIN_PASSWORD_HASH`、`SESSION_SECRET`、`CONFIG_ENCRYPTION_KEY` **分别**填入 Vercel 环境变量。不要把整个文件塞进一个变量；哈希中的 `$` 必须原样保留。
+3. Redeploy 一次，使用固定管理员登录网站。没有账户时直接进入管理后台。
+4. 「交易所账户」→ 新增账户，填只读 API 和本金；「用户管理」→ 新增用户，设置密码并绑定账户。
 
-```bash
-npm run setup
-```
+**后续增加用户、重置密码、换绑账户、停用用户、修改 API 和成本均在网页生效，不用改环境变量或重新部署。** 固定管理员只通过环境变量变更，网页用户无法提升为管理员。`CONFIG_ENCRYPTION_KEY` 必须备份并长期保留，否则旧账户配置无法解密。
 
-按菜单依次操作：
+### 本地
 
-1. **新增交易所账户 / API**：填写账户名称、Binance 只读 API Key / Secret、主网或 Testnet，以及可选的账户本金。也可先选模拟数据测试。
-2. **新增查看用户并绑定账户**：设置朋友的用户名和密码，选择他可以查看的账户。
-3. 通过菜单 **9. 设置用户角色** 将你自己的登录账号设为管理员，朋友的账号保持只读。管理员可以管理所有启用的账户，无需改绑或登录朋友的账号。
-4. 本地首次配置后重启 `npm run dev`。朋友只需要网址、自己的用户名和密码。
+将生成的 `.slzb/admin-local.env` 四项合并到 `.env.local`，然后执行 `npm run dev`。该文件已为 dotenv 转义哈希的 `$`；Vercel 使用未转义的 `admin-env.txt`。本地无数据库时，后台配置加密保存到 `.slzb/directory.enc`；有 `DATABASE_URL` 时与云端一致存入数据库。不要把测试环境连接到真实生产数据库。
 
-继续运行同一命令可以新增其他朋友、修改 API、修改本金、改密码、重新绑定账户、停用用户或撤销其全部登录。
+未配置固定管理员或旧账户时保留 `demo / demo123456` 演示模式。**只要开始填写管理员环境变量，缺少必需配置就会报错，不会退回演示模式。**
 
-配置写入 `.slzb/accounts.json`，密码只保存 scrypt 哈希；API 密钥留在服务端私密配置中。首次设置会自动生成 `.env.local` 中的 `SESSION_SECRET`。这两个位置均被 Git 忽略。
+旧 `PORTAL_CONFIG_JSON` / `.slzb/accounts.json` 模式保留兼容，但不支持网页管理用户。启用固定管理员后使用独立的新目录，旧文件不会删除或自动导入。可以在网页重新录入；不再需要 `config:export`。
 
-**完整管理员操作说明：[docs/ADMIN.md](docs/ADMIN.md)。**
-
-## 部署到 Vercel
-
-1. Vercel 导入 `SiaoKiasu/holdview`，选择 Next.js 和 Node.js 24.x。
-2. 在本地管理好账户与用户后执行 `npm run config:export`。
-3. 在 Vercel Environment Variables 设置：
-
-| 变量                 | 填什么                                                     |
-| -------------------- | ---------------------------------------------------------- |
-| `PORTAL_CONFIG_JSON` | `.slzb/vercel-config.json` 的完整内容                      |
-| `SESSION_SECRET`     | `.slzb/session-secret.txt` 的完整内容                      |
-| `DATABASE_URL`       | 可选：Neon Postgres 连接字符串，用于保存净值及成交同步进度 |
-| `CRON_SECRET`        | 可选：至少 32 位随机值，用于后台采集                       |
-
-4. 点击 Redeploy。后续增加用户或修改 API 后，重新导出、更新 `PORTAL_CONFIG_JSON` 并 Redeploy；保持 `SESSION_SECRET` 不变可保留未被修改用户的登录。
-5. 把部署网址及各自的用户名、密码发给朋友。**不需要把配置文件或 API 信息交给他们。**
-
-默认函数区为 Frankfurt (`fra1`)。交易所访问仍受账户适用地区及出口 IP 限制；启用严格 IP 白名单时需要固定出口方案。项目不会绕过交易所访问限制。
+完整说明：[管理员操作指南](docs/ADMIN.md)。默认函数区为 Frankfurt (`fra1`)，交易所接口仍受账户地区及 API IP 白名单限制。
 
 ## 登录状态
 
@@ -87,7 +67,7 @@ npm run setup
 
 BNB 等第三币手续费使用成交所在分钟的 `ASSETUSDT` 历史 K 线收盘价近似折算；只接受已经结束的对应分钟，不使用当前价格或手工成本。买卖手续费折算后立即计入费用。没有对应历史行情时保留未知，不将稳定币手续费一律按 1 折算。每轮最多补查 12 个分钟汇率，结果与失败重试时间随账本保存，失败至少 5 分钟后重试。手续费支付会减少手续费币的可匹配库存，但不另计非成交的代币支付损益。
 
-本地手工成本保存到私密 `.slzb/costs/`，成交进度在 `.slzb/ledgers/`。Vercel 网页修改成本**必须配置 Neon `DATABASE_URL`**，否则拒绝保存以免重启丢失。数据库同时保存净值和成交进度；成本保存后不需要 Redeploy。导出配置会带上当前手工成本，已存在的数据库成本记录优先于导入配置。角色/API 配置变更仍需重新部署。
+本地手工成本保存到私密 `.slzb/costs/`，成交进度在 `.slzb/ledgers/`。Vercel 网页修改成本**必须配置 Neon `DATABASE_URL`**，否则拒绝保存以免重启丢失。数据库同时保存净值和成交进度；成本保存后不需要 Redeploy。导出配置会带上当前手工成本，已存在的数据库成本记录优先于导入配置。固定管理员模式下，用户与 API 配置修改即时生效，不需要重新部署。
 
 成本按账户、环境、API Key 指纹隔离；更换 Key 后需重新登记或迁移成本。服务端校验管理员角色及 Origin，只有管理员可通过 accountId 选择其他启用账户；普通用户始终限于自己绑定账户，无法调用成本管理接口。保存要求 revision 防止覆盖别人刚保存的内容，并保留最近 100 次修改审计。旧 `costs` 字段可作为尚未网页保存时的手工初值，旧 `performance` 仅保留兼容 API 字段。
 
@@ -98,7 +78,8 @@ BNB 等第三币手续费使用成交所在分钟的 `ASSETUSDT` 历史 K 线收
 ## 开发与接口
 
 ```bash
-npm run setup          # 管理员交互配置
+npm run admin:setup    # 一次性生成固定管理员配置
+npm run setup          # 旧版本地交互配置
 npm run config:check   # 检查管理员配置格式
 npm run config:export  # 导出 Vercel 配置
 npm run check          # 测试 + 类型检查 + 生产构建

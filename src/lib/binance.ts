@@ -250,12 +250,14 @@ export class BinanceClient {
     const entries = Object.entries(ledger.markets);
     const important = ([symbol, m]: (typeof entries)[number]) =>
       held.has(m.baseAsset) || open.has(symbol) || m.trades.length > 0;
+    // Actual account activity must lead untouched markets sharing the same base asset.
+    // Otherwise BTC's many unscanned quote pairs can delay a BTCUSDT sale for hours.
+    const activityRank = ([symbol, m]: (typeof entries)[number]) =>
+      m.trades.length > 0 || open.has(symbol) ? 0 : m.quoteAsset === "USDT" ? 1 : 2;
     // Reserve most of each batch for discovery/rotation so active pairs cannot starve closed positions.
     const priority = entries
       .filter((e) => important(e) && Date.now() - e[1].checkedAt >= 30000)
-      .sort(
-        (a, b) => Number(a[1].complete) - Number(b[1].complete) || a[1].checkedAt - b[1].checkedAt,
-      )
+      .sort((a, b) => activityRank(a) - activityRank(b) || a[1].checkedAt - b[1].checkedAt)
       .slice(0, 8);
     const chosen = new Set(priority.map(([s]) => s));
     const remaining = entries

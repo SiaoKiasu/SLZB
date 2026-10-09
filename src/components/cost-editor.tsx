@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { assetSymbolPattern } from "@/lib/asset-symbol.mjs";
 import type { Holding, Trade } from "@/lib/types";
 import type { CostSettings } from "@/lib/cost-schema";
 
@@ -174,7 +175,7 @@ export function CostEditor({
                 type="button"
                 onClick={() => {
                   const a = asset.trim();
-                  if (!/^[A-Z0-9]{1,30}$/.test(a) || a === "USDT") {
+                  if (!assetSymbolPattern.test(a) || a === "USDT") {
                     setError("请输入有效币种名称；USDT 成本固定为 1。");
                     return;
                   }

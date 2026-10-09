@@ -60,6 +60,23 @@ describe("administrator cost permissions", () => {
     expect(response.headers.get("cache-control")).toContain("no-store");
     expect(JSON.stringify(await response.json())).not.toContain("alice-secret");
   });
+  it("accepts Chinese exchange assets in cost writes and trade queries", async () => {
+    setup();
+    const costs = { BTC: "81520.31", SOL: "112.92", 牛来: "0.07453" };
+    mocks.write.mockResolvedValue({ costs, revision: "stored" });
+    const response = await PUT(
+      request("/api/costs", "alice", {
+        method: "PUT",
+        body: JSON.stringify({ costs, revision: null }),
+      }),
+    );
+    expect(response.status).toBe(200);
+    expect(mocks.write.mock.calls[0][1]).toEqual(costs);
+    const trades = await resource(request(`/api/trades?symbol=${encodeURIComponent("牛来USDT")}`), {
+      params: Promise.resolve({ resource: "trades" }),
+    });
+    expect(trades.status).toBe(200);
+  });
   it("lists accounts only for admins and scopes dashboard and sync to the selected account", async () => {
     setup();
     const adminSession = await (await session(request("/api/session"))).json();
@@ -120,6 +137,9 @@ describe("administrator cost permissions", () => {
     for (const body of [
       { costs: { BTC: "-1" }, revision: null },
       { costs: { BTC: "NaN" }, revision: null },
+      { costs: { "牛来/USDT": "0.07453" }, revision: null },
+      { costs: { "牛来\n": "0.07453" }, revision: null },
+      { costs: { "<script>": "1" }, revision: null },
       { costs: { USDT: "2" }, revision: null },
       { costs: { BTC: "1e999" }, revision: null },
       { costs: { BTC: "1" }, revision: null, accountId: "bob-account" },

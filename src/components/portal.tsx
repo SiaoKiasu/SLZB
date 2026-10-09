@@ -130,7 +130,7 @@ export function Portal() {
   const [search, setSearch] = useState("");
   const [side, setSide] = useState("ALL");
   const [page, setPage] = useState(1);
-  const [showSmall, setShowSmall] = useState(true);
+  const [showSmall, setShowSmall] = useState(false);
   const [now, setNow] = useState(Date.now());
   const checkSession = useCallback(async () => {
     const current = ++generation.current;
@@ -371,12 +371,11 @@ export function Portal() {
           : []),
       ]
     : [];
-  const holdings =
-    data?.holdings.filter(
-      (h) =>
-        h.asset.toLowerCase().includes(search.toLowerCase()) &&
-        (showSmall || Number(h.value ?? 0) >= 1),
-    ) ?? [];
+  const visibleHoldings =
+    data?.holdings.filter((h) => showSmall || h.value === null || Number(h.value) >= 1) ?? [];
+  const holdings = visibleHoldings.filter((h) =>
+    h.asset.toLowerCase().includes(search.toLowerCase()),
+  );
   const trades =
     data?.trades.filter(
       (t) =>
@@ -787,13 +786,13 @@ export function Portal() {
                             <div>
                               <h2>资产分布</h2>
                             </div>
-                            <span className="subtle-tag">{data.holdings.length} ASSETS</span>
+                            <span className="subtle-tag">{visibleHoldings.length} ASSETS</span>
                           </div>
                           <div className="donut-wrap">
                             <ResponsiveContainer width="100%" height={180}>
                               <PieChart>
                                 <Pie
-                                  data={data.holdings
+                                  data={visibleHoldings
                                     .filter((h) => Number(h.value) > 0)
                                     .map((h) => ({ name: h.asset, value: Number(h.value) }))}
                                   dataKey="value"
@@ -804,7 +803,7 @@ export function Portal() {
                                   startAngle={90}
                                   endAngle={-270}
                                 >
-                                  {data.holdings
+                                  {visibleHoldings
                                     .filter((h) => Number(h.value) > 0)
                                     .map((h, i) => (
                                       <Cell key={h.asset} fill={colors[i % colors.length]} />
@@ -820,13 +819,13 @@ export function Portal() {
                             <div className="donut-center">
                               <small>持有资产</small>
                               <strong>
-                                {data.holdings.length}
+                                {visibleHoldings.length}
                                 <span> 种</span>
                               </strong>
                             </div>
                           </div>
                           <div className="allocation-list">
-                            {data.holdings.slice(0, 5).map((h, i) => (
+                            {visibleHoldings.slice(0, 5).map((h, i) => (
                               <div key={h.asset}>
                                 <span>
                                   <i style={{ background: colors[i % colors.length] }} />
@@ -845,29 +844,29 @@ export function Portal() {
                       <div className="panel-heading">
                         <div>
                           <h2>
-                            资产持仓 <span className="count">{data.holdings.length}</span>
+                            资产持仓 <span className="count">{visibleHoldings.length}</span>
                           </h2>
                         </div>
-                        {tab === "overview" ? (
-                          <button className="text-button" onClick={() => navigate("holdings")}>
-                            查看全部 <ArrowUpRight size={15} />
-                          </button>
-                        ) : (
-                          <div className="table-tools">
-                            <label className="checkbox">
-                              <input
-                                type="checkbox"
-                                checked={!showSmall}
-                                onChange={(e) => setShowSmall(!e.target.checked)}
-                              />
-                              隐藏小额资产
-                            </label>
+                        <div className="table-tools">
+                          <label className="checkbox">
+                            <input
+                              type="checkbox"
+                              checked={showSmall}
+                              onChange={(e) => setShowSmall(e.target.checked)}
+                            />
+                            展示小额资产
+                          </label>
+                          {tab === "overview" ? (
+                            <button className="text-button" onClick={() => navigate("holdings")}>
+                              查看全部 <ArrowUpRight size={15} />
+                            </button>
+                          ) : (
                             <SearchBox value={search} onChange={setSearch} placeholder="搜索币种" />
-                          </div>
-                        )}
+                          )}
+                        </div>
                       </div>
                       <HoldingTable
-                        holdings={tab === "overview" ? data.holdings.slice(0, 5) : holdings}
+                        holdings={tab === "overview" ? visibleHoldings.slice(0, 5) : holdings}
                         money={money}
                         profit={profit}
                         hidden={hidden}

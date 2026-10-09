@@ -24,6 +24,16 @@ describe("portfolio accounting", () => {
     expect(h.value).toBe("18000.003");
     expect(h.unrealizedPnl).toBe("3000.003");
   });
+  it("matches Chinese assets to their exact quote and manual cost", () => {
+    const [holding] = valueHoldings(
+      [{ asset: "牛来", free: "90", locked: "10" }],
+      [{ symbol: "牛来USDT", lastPrice: "0.08", priceChangePercent: "2" }],
+      { 牛来: "0.07453" },
+    );
+    expect(holding.averageCost).toBe("0.07453");
+    expect(holding.value).toBe("8");
+    expect(holding.unrealizedPnl).toBe("0.547");
+  });
   it("does not invent zero values, cost bases or stablecoin pegs", () => {
     const rows = valueHoldings(
       [

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { assetSymbolPattern, tradeSymbolPattern } from "./asset-symbol.mjs";
 const amount = z.string().regex(/^\d+(\.\d+)?$/);
 const identifier = z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/);
 export const passwordHashPattern = /^scrypt\$[a-f0-9]{32}\$[a-f0-9]{128}$/;
@@ -11,12 +12,9 @@ export const accountSchema = z
     enabled: z.boolean().default(true),
     apiKey: z.string().default(""),
     apiSecret: z.string().default(""),
-    symbols: z
-      .array(z.string().regex(/^[A-Z0-9]{5,30}$/))
-      .max(20)
-      .default([]),
+    symbols: z.array(z.string().regex(tradeSymbolPattern)).max(20).default([]),
     principal: amount.optional(),
-    costs: z.record(z.string().regex(/^[A-Z0-9]+$/), amount).default({}),
+    costs: z.record(z.string().regex(assetSymbolPattern), amount).default({}),
     performance: z
       .object({
         baseline: amount,

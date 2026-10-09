@@ -1,6 +1,7 @@
 import { authorizeAccount, authenticatedJson } from "@/lib/auth";
 import { dashboard } from "@/lib/service";
 import { failure } from "@/lib/http";
+import { tradeSymbolPattern } from "@/lib/asset-symbol.mjs";
 import { AppError } from "@/lib/errors";
 import { BinanceClient } from "@/lib/binance";
 export const runtime = "nodejs";
@@ -30,7 +31,7 @@ export async function GET(request: Request, context: { params: Promise<{ resourc
       const fromId = url.searchParams.get("fromId") ?? undefined;
       const limit = Number(url.searchParams.get("limit") ?? 100);
       if (
-        !/^[A-Z0-9]{5,30}$/.test(symbol) ||
+        !tradeSymbolPattern.test(symbol) ||
         (fromId && !/^\d{1,16}$/.test(fromId)) ||
         !Number.isInteger(limit) ||
         limit < 1 ||
